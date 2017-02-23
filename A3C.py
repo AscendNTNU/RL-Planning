@@ -16,7 +16,7 @@ import subprocess
 import time
 import string
 
-_numTargets = CDLL('/home/ramunter/Ascend/ai-sim-rf/PythonAccessToSim.so')
+_numTargets = CDLL('./PythonAccessToSim.so')
 
 Num_Targets =_numTargets.get_sim_Num_Targets()
 D = 3+3*Num_Targets # input dimensionality
@@ -44,13 +44,13 @@ class step_result(Structure):
 
 
 def observation_to_input_array(ai_view):
-    #print(ai_view.elapsed_time)
-    result = np.array([ai_view.elapsed_time, ai_view.drone_x, ai_view.drone_y])
-    for i in range(Num_Targets):
-        result = np.append(result, ai_view.target_x[i])
-        result = np.append(result, ai_view.target_y[i])
-        result = np.append(result, ai_view.target_q[i])
-    return result
+	#print(ai_view.elapsed_time)
+	result = np.array([ai_view.elapsed_time, ai_view.drone_x, ai_view.drone_y])
+	for i in range(Num_Targets):
+		result = np.append(result, ai_view.target_x[i])
+		result = np.append(result, ai_view.target_y[i])
+		result = np.append(result, ai_view.target_q[i])
+	return result
 
 
 class AC_Network():
@@ -146,18 +146,15 @@ class Worker():
 		#The Below code is related to setting up the Doom environment
 		
 		#Todo:
-		self.actions = [1,2,3]
+		self.actions = list(range(0,3*Num_Targets))
 		# for i in range(Num_Targets):
 		# 	self.actions.append(2*i)
 		# 	self.actions.append(2*i+1)
-		self.env = CDLL('/home/ramunter/Ascend/ai-sim-rf/PythonAccessToSim.so')
+		self.env = CDLL('./PythonAccessToSim.so')
 		self.env.step.restype = step_result
 		self.env.send_command.restype = c_int
 		self.env.initialize.restype = c_int
 		self.env.recieve_state_gui.restype = step_result
-
-		self.e = startE
-		self.step = None
 		self.last_time = 0;
 
 		
@@ -182,20 +179,20 @@ class Worker():
 		# Update the global network using gradients from loss
 		# Generate network statistics to periodically save
 		#rnn_state = self.local_AC.state_init
-        rnn_state = self.local_AC.state_init
-        feed_dict = {self.local_AC.target_v:discounted_rewards,
-            self.local_AC.inputs:np.vstack(observations),
-            self.local_AC.actions:actions,
-            self.local_AC.advantages:advantages,
-            self.local_AC.state_in[0]:rnn_state[0],
-            self.local_AC.state_in[1]:rnn_state[1]}
-        v_l,p_l,e_l,g_n,v_n,_ = sess.run([self.local_AC.value_loss,
-            self.local_AC.policy_loss,
-            self.local_AC.entropy,
-            self.local_AC.grad_norms,
-            self.local_AC.var_norms,
-            self.local_AC.apply_grads],
-            feed_dict=feed_dict)
+		rnn_state = self.local_AC.state_init
+		feed_dict = {self.local_AC.target_v:discounted_rewards,
+			self.local_AC.inputs:np.vstack(observations),
+			self.local_AC.actions:actions,
+			self.local_AC.advantages:advantages,
+			self.local_AC.state_in[0]:rnn_state[0],
+			self.local_AC.state_in[1]:rnn_state[1]}
+		v_l,p_l,e_l,g_n,v_n,_ = sess.run([self.local_AC.value_loss,
+			self.local_AC.policy_loss,
+			self.local_AC.entropy,
+			self.local_AC.grad_norms,
+			self.local_AC.var_norms,
+			self.local_AC.apply_grads],
+			feed_dict=feed_dict)
 		return v_l / len(rollout),p_l / len(rollout),e_l / len(rollout), g_n,v_n
 		
 	def work(self,max_episode_length,gamma,sess,coord,saver):
@@ -221,21 +218,19 @@ class Worker():
 					self.env.initialize()
 					self.step = self.env.step()
 					s = observation_to_input_array(self.step.ai_data_input);
-				#rnn_state = self.local_AC.state_init
-				while episode_step_count < max_episode_length:
+
+				rnn_state = self.local_AC.state_init
+				while True:
 					#Take an action using probabilities from policy network output.
 					#print(self.step.ai_data_input.elapsed_time - self.last_time)
 					#and self.step.ai_data_input.elapsed_time - self.last_time > 5.0:
 					self.last_time = self.step.ai_data_input.elapsed_time;
-					a_dist,v = sess.run([self.local_AC.policy,self.local_AC.value,self.local_AC.state_out], 
-                        feed_dict={self.local_AC.inputs:[s],
-                        self.local_AC.state_in[0]:rnn_state[0],
-                        self.local_AC.state_in[1]:rnn_state[1]})	
-					if np.random.rand(1) < self.e:# or total_steps < pre_train_steps:
-						a = np.random.randint(0,3)
-					else:
-						a = np.random.choice(a_dist[0],p=a_dist[0])
-						a = np.argmax(a_dist == a)
+					a_dist,v,rnn_state  = sess.run([self.local_AC.policy,self.local_AC.value,self.local_AC.state_out], 
+						feed_dict={self.local_AC.inputs:[s],
+						self.local_AC.state_in[0]:rnn_state[0],
+						self.local_AC.state_in[1]:rnn_state[1]})	
+					a = np.random.choice(a_dist[0],p=a_dist[0])
+					a = np.argmax(a_dist == a)
 					#print(a_dist)
 					if render:
 						self.env.send_command_gui(self.actions[a])
@@ -243,6 +238,8 @@ class Worker():
 					else:
 						self.env.send_command(self.actions[a])
 						self.step = self.env.step()
+						while self.step.cmd_done == 0:
+							self.step = self.env.step()
 					d = self.step.done
 					r = self.step.reward
 					if d == False:
@@ -257,8 +254,6 @@ class Worker():
 					s = s1                    
 					total_steps += 1
 					episode_step_count += 1
-					if self.e > endE:
-						self.e -= stepDrop
 
 
 					# If the episode hasn't ended, but the experience buffer is full, then we
@@ -301,7 +296,7 @@ class Worker():
 					summary.value.add(tag='Losses/Grad Norm', simple_value=float(g_n))
 					summary.value.add(tag='Losses/Var Norm', simple_value=float(v_n))
 					self.summary_writer.add_summary(summary, episode_count)
-					print("Episode Number: ", episode_count, "Mean reward: ", mean_reward, "E: ", self.e, "Last_action ", a)
+					print("Episode Number: ", episode_count, "Mean reward: ", mean_reward, "Last_action ", a)
 					self.summary_writer.flush()
 				if self.name == 'worker_0':
 					sess.run(self.increment)
@@ -316,7 +311,7 @@ class Worker():
 max_episode_length = 200
 gamma = .99# discount rate for advantage estimation and reward discounting
 s_size = D #
-a_size = 3#Num_Targets*2 + 1# Agent can move, land or nothing
+a_size = 30#Num_Targets*2 + 1# Agent can move, land or nothing
 load_model = False
 render = False
 model_path = './model'
@@ -325,36 +320,36 @@ model_path = './model'
 tf.reset_default_graph()
 
 if not os.path.exists(model_path):
-    os.makedirs(model_path)
-    
+	os.makedirs(model_path)
+	
 with tf.device("/cpu:0"): 
-    global_episodes = tf.Variable(0,dtype=tf.int32,name='global_episodes',trainable=False)
-    trainer = tf.train.AdamOptimizer(learning_rate=0.00001)
-    master_network = AC_Network(s_size,a_size,'global',None) # Generate global network
-    num_workers = 1#multiprocessing.cpu_count() # Set workers ot number of available CPU threads
-    workers = []
-    # Create worker classes
-    for i in range(num_workers):
-        workers.append(Worker(i,s_size,a_size,trainer,model_path,global_episodes))
-    saver = tf.train.Saver(max_to_keep=5)
+	global_episodes = tf.Variable(0,dtype=tf.int32,name='global_episodes',trainable=False)
+	trainer = tf.train.AdamOptimizer(learning_rate=0.00001)
+	master_network = AC_Network(s_size,a_size,'global',None) # Generate global network
+	num_workers = multiprocessing.cpu_count() # Set workers ot number of available CPU threads
+	workers = []
+	# Create worker classes
+	for i in range(num_workers):
+		workers.append(Worker(i,s_size,a_size,trainer,model_path,global_episodes))
+	saver = tf.train.Saver(max_to_keep=5)
 
 with tf.Session() as sess:
-    coord = tf.train.Coordinator()
-    if load_model == True:
-        print('Loading Model...')
-        ckpt = tf.train.get_checkpoint_state(model_path)
-        saver.restore(sess,ckpt.model_checkpoint_path)
-    else:
-        sess.run(tf.global_variables_initializer())
-        
-    # This is where the asynchronous magic happens.
-    # Start the "work" process for each worker in a separate threat.
-    worker_threads = []
-    for worker in workers:
-        worker_work = lambda: worker.work(max_episode_length,gamma,sess,coord,saver)
-        t = threading.Thread(target=(worker_work))
-        t.start()
-        worker_threads.append(t)
-    print("Trying to join")
-    coord.join(worker_threads)
-    print("done woker joining")
+	coord = tf.train.Coordinator()
+	if load_model == True:
+		print('Loading Model...')
+		ckpt = tf.train.get_checkpoint_state(model_path)
+		saver.restore(sess,ckpt.model_checkpoint_path)
+	else:
+		sess.run(tf.global_variables_initializer())
+		
+	# This is where the asynchronous magic happens.
+	# Start the "work" process for each worker in a separate threat.
+	worker_threads = []
+	for worker in workers:
+		worker_work = lambda: worker.work(max_episode_length,gamma,sess,coord,saver)
+		t = threading.Thread(target=(worker_work))
+		t.start()
+		worker_threads.append(t)
+	print("Trying to join")
+	coord.join(worker_threads)
+	print("done woker joining")
