@@ -13,11 +13,11 @@ std::mutex mtx;
 //step returns the observation, reward and 1 if done.
 
 
-int step_length = 60*10; //Frames?
+int step_length = 10; //Frames?
 int last_robot_reward = 0;
 int last_time = 0;
 int last_position_reward = 0;
-int reward_for_robot = 300;
+int reward_for_robot = 1000;
 double last_robot_q[Num_Targets];
 static double GRID[22][22];
 const float SPEED = 0.33;
@@ -95,8 +95,12 @@ extern "C"{
     	//Robot out of bounds rewards
     	//Reward is added each time, so need to remove previously rewarded robots
     	for(int i = 0; i < Num_Targets; i++){
-    	    //if(observed_state.target_reward[i] > 0){
-    	    reward += observed_state.target_reward[i];
+    	    if(observed_state.target_reward[i] > 0){
+    	    	reward += observed_state.target_reward[i];
+    	    }
+    	 	else{
+    	 		reward += 0.5*observed_state.target_reward[i];
+    	 	}
     	}
 
 
@@ -104,6 +108,7 @@ extern "C"{
 
     	result -= last_robot_reward;
     	last_robot_reward = reward_for_robot*(reward);
+
     	//Time spent rewards
     	//result -= (observed_state.elapsed_time - last_time);
     	//last_time = observed_state.elapsed_time;
@@ -118,18 +123,12 @@ extern "C"{
     	return 0;
 	}
 
-	bool target_removed(int i){
-		if(observed_state.target_removed[i]){
-			return true;
-		}
-		return false;
-	}
 	int get_done(){
 		int result = 0;
     	for(int i = 0; i < Num_Targets; i++){
     	    result += observed_state.target_removed[i];
     	}
-		if(result == Num_Targets){
+		if(result == Num_Targets || observed_state.elapsed_time > 1200){
     	    return 1;
     	}
     	return 0;
@@ -162,13 +161,10 @@ extern "C"{
 		    }
 
 		    else{
-		    	result.target_q[i] = last_robot_q[i];
+		    	result.target_q[i] = (last_robot_q[i]);
 		    }
-
 		}
-		// std::cout << " returning " << std::endl;
-		// // TODO: add last seen position if not seen
-		// std::cout << result.target_q[0] << std::endl;
+
 		return result;
 	}
 
@@ -182,9 +178,7 @@ extern "C"{
 	    }
 
 	    observed_state = sim_observe_state(state);
-	    //std::cout << " calling" << std::endl;
 	    result.observation = update_ai_input();
-		//std::cout << " updated " << std::endl;
 	    result.reward = reward_calculator();
 
 	    result.done = get_done();
@@ -197,6 +191,10 @@ extern "C"{
 	int send_command(int a){
 
 		int action_type = a%3;
+		if(observed_state.target_removed[a/3]){
+			return 0;
+		}
+
 		switch(action_type){
 			case 0:
 	            cmd.type = sim_CommandType_LandInFrontOf;
@@ -210,8 +208,8 @@ extern "C"{
 
 	        case 2:
 	        	cmd.type = sim_CommandType_Search;
-	  			cmd.x = observed_state.target_x[ a/3];
-	  			cmd.y = observed_state.target_y[ a/3];
+	  			cmd.x = observed_state.target_x[a/3];
+	  			cmd.y = observed_state.target_y[a/3];
 			break;
 
 	        default:
@@ -220,6 +218,7 @@ extern "C"{
 		}
 		return 0;
 	}
+
 
 
 	// GUI VERSION:
@@ -246,6 +245,11 @@ extern "C"{
 		sim_Command cmd;
 
 		int action_type = a%3;
+
+		if(observed_state.target_removed[a/3]){
+			return 0;
+		}
+
 		switch(action_type){
 			case 0:
 	            cmd.type = sim_CommandType_LandInFrontOf;

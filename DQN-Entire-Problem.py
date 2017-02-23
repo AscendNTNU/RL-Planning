@@ -9,7 +9,7 @@ import subprocess
 from ctypes import *
 import time
 
-_sim = CDLL('/home/ramunter/Ascend/ai-sim-rf/PythonAccessToSim.so')
+_sim = CDLL('./PythonAccessToSim.so')
 
 Num_Targets =_sim.get_sim_Num_Targets()
 D = 3+3*Num_Targets # input dimensionality
@@ -34,7 +34,7 @@ _sim.initialize.restype = c_int
 _sim.recieve_state_gui.restype = step_result
 _sim.send_command_gui.restype = c_int
 
-class Qnetwork(): ##is this actually a qnetwork?
+class Qnetwork():
 	def __init__(self, lr, s_size,a_size,h_size, batch_size, myScope):
 		#These lines established the feed-forward part of the network. The agent takes a state and produces an action.
 		self.inputs= tf.placeholder(shape=[None,s_size],dtype=tf.float32)
@@ -50,11 +50,10 @@ class Qnetwork(): ##is this actually a qnetwork?
 		#Then combine them together to get our final Q-values.
 		self.Qout = self.Value + tf.sub(self.Advantage,tf.reduce_mean(self.Advantage,reduction_indices=1,keep_dims=True))
 		self.predict = tf.argmax(self.Qout,1)
-		
 		#Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
 		self.targetQ = tf.placeholder(shape=[None],dtype=tf.float32)
 		self.actions = tf.placeholder(shape=[None],dtype=tf.int32)
-		self.actions_onehot = tf.one_hot(self.actions,3,dtype=tf.float32)
+		self.actions_onehot = tf.one_hot(self.actions, a_size, dtype=tf.float32)
 		
 		self.Q = tf.reduce_sum(tf.mul(self.Qout, self.actions_onehot), reduction_indices=1)
 		
@@ -95,6 +94,7 @@ def updateTargetGraph(tfVars,tau):
 	total_vars = len(tfVars)
 	op_holder = []
 	for idx,var in enumerate(tfVars[0:int(total_vars/2)]):
+		
 		op_holder.append(tfVars[idx+int(total_vars/2)].assign((var.value()*tau) + ((1-tau)*tfVars[idx+int(total_vars/2)].value())))
 	return op_holder
 
@@ -118,16 +118,16 @@ tf.reset_default_graph() #Clear the Tensorflow graph.
 
 batch_size = 50 #How many experiences to use for each training step.
 update_freq = 4 #How often to perform a training step.
-y = .99 #Discount factor on the target Q-values
+y = .995 #Discount factor on the target Q-values
 startE = 1#Starting chance of random action
 endE = 0.1 #Final chance of random action
-anneling_steps = 30000000 #How many steps of training to reduce startE to endE.
+anneling_steps = 5000000 #How many steps of training to reduce startE to endE.
 num_episodes = 10000000#How many episodes of game environment to train network with.
-pre_train_steps = 3000000 #How many steps of random actions before training begins.
-max_epLength = 6*10 #The max allowed length of our episode.
-load_model = False #Whether to load a saved model.
+pre_train_steps = 1000000 #How many steps of random actions before training begins.
+#max_epLength = 6*10 #The max allowed length of our episode.
+load_model = False#True #Whether to load a saved model.
 path = "./dqn" #The path to save our model to.
-h_size = 1024#Hidden layer size
+h_size = 128#Hidden layer size
 tau = 0.001 #Rate to update target network toward primary network
 learning_rate = 1e-4
 action_pool = list(range(0,3*Num_Targets))
@@ -135,9 +135,9 @@ action_pool = list(range(0,3*Num_Targets))
 render = False
 tf.reset_default_graph()
 
-cell = tf.nn.rnn_cell.LSTMCell(num_units=h_size,state_is_tuple=True)
-mainQN = Qnetwork(lr=learning_rate,s_size=D,a_size=3,h_size=h_size, batch_size = batch_size, myScope = "main")
-targetQN = Qnetwork(lr=learning_rate,s_size=D,a_size=3,h_size=h_size, batch_size = batch_size,  myScope = "target") #Load the agent.
+#cell = tf.nn.rnn_cell.LSTMCell(num_units=h_size,state_is_tuple=True)
+mainQN = Qnetwork(lr=learning_rate,s_size=D,a_size=len(action_pool),h_size=h_size, batch_size = batch_size, myScope = "main")
+targetQN = Qnetwork(lr=learning_rate,s_size=D,a_size=len(action_pool),h_size=h_size, batch_size = batch_size,  myScope = "target") #Load the agent.
 
 
 init = tf.global_variables_initializer()
@@ -182,17 +182,18 @@ with tf.Session() as sess:
 		#Reset environment and get first new observation
 		last_time = 0
 		if render:
+			#TODO:COULD CAUSE PROBLEMS
 			process = subprocess.Popen("build/sim")
 			step = _sim.recieve_state_gui()
 			while step.ai_data_input.elapsed_time - last_time < 10:
-					step = _sim.recieve_state_gui()
+				step = _sim.recieve_state_gui()
 			last_time = step.ai_data_input.elapsed_time
 		else:
-
 			_sim.initialize()
 			step = _sim.step()
+
 			while(step.ai_data_input.drone_x < 0):
-				_sim.initialize()
+				sim.initialize()
 				step = _sim.step()
 
 		s = observation_to_input_array(step.ai_data_input)
@@ -202,57 +203,61 @@ with tf.Session() as sess:
 		j = 0
 
 		#The Q-Network
-		while j < max_epLength: #If the agent takes longer than max time, end the trial.
-				j+=1
-				#Choose an action by greedily (with e chance of random action) from the Q-network
-				if np.random.rand(1) < e:# or total_steps < pre_train_steps:
-					a = np.random.randint(0,3*Num_Targets)
-				else:
-					a = sess.run(mainQN.predict,feed_dict={mainQN.inputs:[s]})[0]
-				if render:
-					_sim.send_command_gui(action_pool[a])
-					while step.ai_data_input.elapsed_time - last_time < 10:
-						step = _sim.recieve_state_gui()
-					last_time = step.ai_data_input.elapsed_time
-				else:
-					_sim.send_command(action_pool[a])
+		while True: #If the agent takes longer than max time, end the trial.
+			j+=1
+
+			#Choose an action by greedily (with e chance of random action) from the Q-network
+			if np.random.rand(1) < e:# or total_steps < pre_train_steps:
+				a = np.random.randint(0,3*Num_Targets)
+			else:
+				a = sess.run(mainQN.predict,feed_dict={mainQN.inputs:[s]})[0]
+
+			if render:
+				_sim.send_command_gui(action_pool[a])
+				step = _sim.recieve_state_gui()
+				while step.cmd_done == 0:
+					step = _sim.recieve_state_gui()
+			else:
+				_sim.send_command(action_pool[a])
+				step = _sim.step()
+				while step.cmd_done == 0:
 					step = _sim.step()
-				s1 = observation_to_input_array(step.ai_data_input);
+
+			s1 = observation_to_input_array(step.ai_data_input);
+			
+			r = step.reward
+			d = step.done
+			total_steps += 1
+			episodeBuffer.add(np.reshape(np.array([s,a,r,s1,d]),[1,5])) #Save the experience to our episode buffer.
+			#print(a, step.ai_data_input.elapsed_time, step.ai_data_input.drone_x,step.ai_data_input.drone_y,step.ai_data_input.target_x[0],step.ai_data_input.target_y[0], step.ai_data_input.target_q[0])
+
+			if total_steps > pre_train_steps:
+				if e > endE:
+					e -= stepDrop
 				
-				r = step.reward
-				d = step.done
-				total_steps += 1
-				episodeBuffer.add(np.reshape(np.array([s,a,r,s1,d]),[1,5])) #Save the experience to our episode buffer.
-				#print(a, step.ai_data_input.elapsed_time, step.ai_data_input.drone_x,step.ai_data_input.drone_y,step.ai_data_input.target_x[0],step.ai_data_input.target_y[0], step.ai_data_input.target_q[0])
-
-				if total_steps > pre_train_steps:
-					if e > endE:
-						e -= stepDrop
+				if total_steps % (update_freq) == 0:
+					trainBatch = myBuffer.sample(batch_size) #Get a random batch of experiences.
+					#Below we perform the Double-DQN update to the target Q-values
+					Q1 = sess.run(mainQN.predict,feed_dict={mainQN.inputs:np.vstack(trainBatch[:,3])})
+					Q2 = sess.run(targetQN.Qout,feed_dict={targetQN.inputs:np.vstack(trainBatch[:,3])})
+					end_multiplier = -(trainBatch[:,4] - 1)
+					doubleQ = Q2[range(batch_size),Q1]
+					targetQ = trainBatch[:,2] + (y*doubleQ * end_multiplier)
+					#Update the network with our target values.
+					_ = sess.run(mainQN.updateModel,
+						feed_dict={mainQN.inputs:np.vstack(trainBatch[:,0]),mainQN.targetQ:targetQ, mainQN.actions:trainBatch[:,1]})
 					
-					if total_steps % (update_freq) == 0:
-						trainBatch = myBuffer.sample(batch_size) #Get a random batch of experiences.
-						#Below we perform the Double-DQN update to the target Q-values
-						Q1 = sess.run(mainQN.predict,feed_dict={mainQN.inputs:np.vstack(trainBatch[:,3])})
-						Q2 = sess.run(targetQN.Qout,feed_dict={targetQN.inputs:np.vstack(trainBatch[:,3])})
-						end_multiplier = -(trainBatch[:,4] - 1)
-						doubleQ = Q2[range(batch_size),Q1]
-						targetQ = trainBatch[:,2] + (y*doubleQ * end_multiplier)
-						#Update the network with our target values.
-						_ = sess.run(mainQN.updateModel,
-							feed_dict={mainQN.inputs:np.vstack(trainBatch[:,0]),mainQN.targetQ:targetQ, mainQN.actions:trainBatch[:,1]})
-						
-						updateTarget(targetOps,sess) #Set the target network to be equal to the primary network.
-				rAll += r
-				s = s1
+					updateTarget(targetOps,sess) #Set the target network to be equal to the primary network.
+			rAll += r
+			s = s1
 
-				if d == True:
-
-					break
-
+			if d == True:
+				break
 		if render:
 			print("killing")
 			process.kill()
 			print(rAll)
+
 		#Get all experiences from this episode and discount their rewards.
 		myBuffer.add(episodeBuffer.buffer)
 		jList.append(j)
@@ -280,4 +285,4 @@ with tf.Session() as sess:
 
 	saver.save(sess,path+'/model-'+str(i)+'.cptk')
 
-# print("Percent of succesful episodes: " + str(sum(rList)/num_episodes) + "%")
+print("Percent of succesful episodes: " + str(sum(rList)/num_episodes) + "%")

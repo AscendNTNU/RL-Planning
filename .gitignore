@@ -3,3 +3,7 @@ build/*.lib
 build/*.dll
 !build/*.sh
 !build/*.bat
+dqn
+dqn_summary
+imgui.ini
+
