@@ -12,41 +12,34 @@ import multiprocessing
 from inspect import getsourcefile
 current_path = os.path.dirname(os.path.abspath(getsourcefile(lambda:0)))
 import_path = os.path.abspath(os.path.join(current_path, "../.."))
-
 if import_path not in sys.path:
   sys.path.append(import_path)
 
 from estimators import ValueEstimator, PolicyEstimator
 from policy_monitor import PolicyMonitor
 from worker import Worker
-
+from ctypes import *
+from helper import *
 
 tf.flags.DEFINE_string("model_dir", "/tmp/a3c", "Directory to write Tensorboard summaries and videos to.")
-tf.flags.DEFINE_string("env", "Breakout-v0", "Name of gym Atari environment, e.g. Breakout-v0")
 tf.flags.DEFINE_integer("t_max", 5, "Number of steps before performing an update")
 tf.flags.DEFINE_integer("max_global_steps", None, "Stop training after this many steps in the environment. Defaults to running indefinitely.")
-tf.flags.DEFINE_integer("eval_every", 300, "Evaluate the policy every N seconds")
+tf.flags.DEFINE_integer("eval_every", 3000, "Evaluate the policy every N seconds")
 tf.flags.DEFINE_boolean("reset", False, "If set, delete the existing model directory and start training from scratch.")
 tf.flags.DEFINE_integer("parallelism", None, "Number of threads to run. If not set we run [num_cpu_cores] threads.")
 
 FLAGS = tf.flags.FLAGS
 
 def make_env(wrap=True):
-    env = CDLL('./PythonAccessToSim.so')
-    env.step.restype = step_result
-    env.send_command.restype = c_int
-    env.initialize.restype = c_int
-    env.recieve_state_gui.restype = step_result
+  env = CDLL('./PythonAccessToSim.so')
+  env.step.restype = step_result
+  env.send_command.restype = c_int
+  env.initialize.restype = c_int
+  env.recieve_state_gui.restype = step_result
   return env
 
-# Depending on the game we may have a limited action space
-env_ = make_env()
-if FLAGS.env == "Pong-v0" or FLAGS.env == "Breakout-v0":
-  VALID_ACTIONS = list(range(4))
-else:
-  VALID_ACTIONS = list(range(env_.action_space.n))
-env_.close()
 
+VALID_ACTIONS = list(range(0,3*Num_Targets))
 
 # Set the number of workers
 NUM_WORKERS = multiprocessing.cpu_count()
@@ -132,4 +125,5 @@ with tf.Session() as sess:
   monitor_thread.start()
 
   # Wait for all workers to finish
-coord.join(worker_threads)
+  #print("Trying to join")
+  coord.join(worker_threads)

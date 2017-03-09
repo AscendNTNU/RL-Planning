@@ -15,21 +15,7 @@ if import_path not in sys.path:
 
 from estimators import ValueEstimator, PolicyEstimator
 from worker import make_copy_params_op
-
-class ai_data_input_struct(Structure):
-  _fields_ = [("elapsed_time", c_float),
-        ("drone_x", c_int),
-        ("drone_y", c_int),
-        ("target_x", c_int*Num_Targets),
-        ("target_y", c_int*Num_Targets),
-        ("target_q", c_float*Num_Targets)]
-
-class step_result(Structure):
-  _fields_ = [("ai_data_input", ai_data_input_struct),
-        ("reward", c_float),
-        ("done", c_bool),
-        ("cmd_done", c_bool)]
-
+from helper import *
 
 class PolicyMonitor(object):
   """
@@ -46,7 +32,7 @@ class PolicyMonitor(object):
     self.global_policy_net = policy_net
     self.summary_writer = summary_writer
     self.saver = saver
-    self.sp = StateProcessor()
+    #self.sp = StateProcessor()
 
     self.env = CDLL('./PythonAccessToSim.so')
     self.env.step.restype = step_result
@@ -54,8 +40,10 @@ class PolicyMonitor(object):
     self.env.initialize.restype = c_int
     self.env.recieve_state_gui.restype = step_result
 
-    self.checkpoint_path = os.path.abspath(os.path.join(summary_writer.get_logdir(), "../checkpoints/model"))
+    self.actions = list(range(0,3*Num_Targets))
 
+    self.checkpoint_path = os.path.abspath(os.path.join(summary_writer.get_logdir(), "./checkpoints/model"))
+    print(self.checkpoint_path)
     # Local policy net
     with tf.variable_scope("policy_eval"):
       self.policy_net = PolicyEstimator(policy_net.num_outputs)
@@ -77,6 +65,7 @@ class PolicyMonitor(object):
 
       # Run an episode
       done = False
+      #print("start")
       self.env.initialize()
       run = self.env.step()
       state = observation_to_input_array(run.ai_data_input)
@@ -85,14 +74,18 @@ class PolicyMonitor(object):
       while not run.done:
         action_probs = self._policy_net_predict(state, sess)
         action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
-        self.env.send_command(action)
+        self.env.send_command(self.actions[action])
         next_run = self.env.step()
-        while(!next_run.cmd_done):
+        while not next_run.cmd_done:
           next_run = self.env.step()
+          total_reward += next_run.reward
         next_state = observation_to_input_array(next_run.ai_data_input)
-        total_reward += reward
+        total_reward += next_run.reward
         episode_length += 1
         state = next_state
+        run = next_run
+
+      #print("done")
 
       # Add summaries
       episode_summary = tf.Summary()
@@ -103,6 +96,7 @@ class PolicyMonitor(object):
 
       if self.saver is not None:
         self.saver.save(sess, self.checkpoint_path)
+        #print("here")
 
       tf.logging.info("Eval results at step {}: total_reward {}, episode_length {}".format(global_step, total_reward, episode_length))
 
@@ -118,4 +112,5 @@ class PolicyMonitor(object):
         # Sleep until next evaluation cycle
         time.sleep(eval_every)
     except tf.errors.CancelledError:
-return
+      print("shit")
+      return

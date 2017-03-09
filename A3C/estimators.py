@@ -2,8 +2,8 @@
 
 import numpy as np
 import tensorflow as tf
-
-s_size = 3 * 10 + 3
+from helper import *
+s_size = 3 * Num_Targets + 3
 
 def build_shared_network(X, add_summaries=False):
   """
@@ -42,7 +42,7 @@ class PolicyEstimator():
 
     # Placeholders for our input
     # Our input is the Time, drone position and robot positions
-    self.inputs= tf.placeholder(shape=[None,s_size], dtype=tf.float32, name = 'X')
+    self.states= tf.placeholder(shape=[None,s_size], dtype=tf.float32, name = "X")
     # The TD target value
     self.targets = tf.placeholder(shape=[None], dtype=tf.float32, name="y")
     # Integer id of which action was selected
@@ -54,12 +54,12 @@ class PolicyEstimator():
 
     # Graph shared with Value Net
     with tf.variable_scope("shared", reuse=reuse):
-      fc1 = build_shared_network(X, add_summaries=(not reuse))
+      fc1 = build_shared_network(self.states, add_summaries=(not reuse))
 
 
     with tf.variable_scope("policy_net"):
-      self.logits = tf.contrib.layers.fully_connected(X, 256, activation_fn = none)
-      self.probs = tf.nn.elu(self.logits) + 1e-8
+      self.logits = tf.contrib.layers.fully_connected(fc1, num_outputs, activation_fn = None)
+      self.probs = tf.nn.softmax(self.logits)+ 1e-8
 
       self.predictions = {
         "logits": self.logits,
@@ -110,13 +110,13 @@ class ValueEstimator():
   def __init__(self, reuse=False, trainable=True):
     # Placeholders for our input
 
-    self.inputs= tf.placeholder(shape=[None,s_size], dtype=tf.float32, name = 'X')
+    self.states= tf.placeholder(shape=[None,s_size], dtype=tf.float32, name = 'X')
     # The TD target value
     self.targets = tf.placeholder(shape=[None], dtype=tf.float32, name="y")
 
     # Graph shared with Value Net
     with tf.variable_scope("shared", reuse=reuse):
-      fc1 = build_shared_network(X, add_summaries=(not reuse))
+      fc1 = build_shared_network(self.states, add_summaries=(not reuse))
 
     with tf.variable_scope("value_net"):
       self.logits = tf.contrib.layers.fully_connected(

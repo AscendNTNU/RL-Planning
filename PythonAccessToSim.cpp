@@ -13,7 +13,7 @@ std::mutex mtx;
 //step returns the observation, reward and 1 if done.
 
 
-int step_length = 10; //Frames?
+int step_length = 60*2; //Frames?
 int last_robot_reward = 0;
 int last_time = 0;
 int last_position_reward = 0;
@@ -41,10 +41,10 @@ struct Plank
 //Input data for neural network
 struct ai_data_input_struct{
 	float elapsed_time;
-	int drone_x;
-	int drone_y;
-	int target_x[Num_Targets];
-	int target_y[Num_Targets];
+	float drone_x;
+	float drone_y;
+	float target_x[Num_Targets];
+	float target_y[Num_Targets];
 	float target_q[Num_Targets];
 };
 
@@ -60,9 +60,6 @@ sim_State state = {};
 sim_Observed_State observed_state;
 sim_Observed_State prev_obv_state;
 sim_Command cmd;
-
-//Interfacing(is that the right word here?) with python only works with C
-//Atleast the way I do it
 
 extern "C"{
 
@@ -90,7 +87,7 @@ extern "C"{
 
 	float reward_calculator(){
 		float result = 0;
-    	int reward = 0;
+    	float reward = 0;
 
     	//Robot out of bounds rewards
     	//Reward is added each time, so need to remove previously rewarded robots
@@ -113,14 +110,14 @@ extern "C"{
     	//result -= (observed_state.elapsed_time - last_time);
     	//last_time = observed_state.elapsed_time;
     	//result += position_reward();
-    	return result;
+    	return result/reward_for_robot;
 	}
 
 	bool ready_for_command(){
     	if(observed_state.drone_cmd_done){
-    	    return 1;
+    	    return true;
     	}
-    	return 0;
+    	return false;
 	}
 
 	int get_done(){
@@ -128,7 +125,7 @@ extern "C"{
     	for(int i = 0; i < Num_Targets; i++){
     	    result += observed_state.target_removed[i];
     	}
-		if(result == Num_Targets || observed_state.elapsed_time > 1200){
+		if(result == Num_Targets || observed_state.elapsed_time > 600){
     	    return 1;
     	}
     	return 0;
@@ -153,8 +150,14 @@ extern "C"{
 
 		for(int i = 0; i < Num_Targets; i++){
 		    //if(observed_state.target_in_view[i]){
-	    	result.target_x[i] = observed_state.target_x[i];
-	    	result.target_y[i] = observed_state.target_y[i];
+			if(observed_state.target_removed[i]){
+	    		result.target_x[i] = -10;
+	    		result.target_y[i] = -10;				
+			}
+			else{
+	    		result.target_x[i] = observed_state.target_x[i];
+	    		result.target_y[i] = observed_state.target_y[i];
+	    	}
 		    if(targetIsMoving(i,prev_obv_state,observed_state)){
 		    	result.target_q[i] = observed_state.target_q[i];
 		    	last_robot_q[i] = observed_state.target_q[i];
@@ -175,6 +178,9 @@ extern "C"{
 	    	mtx.lock();
 	        state = sim_tick(state, cmd);
 	        mtx.unlock();
+	        if (state.drone.cmd_done){
+                cmd.type = sim_CommandType_NoCommand;
+            }
 	    }
 
 	    observed_state = sim_observe_state(state);
@@ -192,6 +198,8 @@ extern "C"{
 
 		int action_type = a%3;
 		if(observed_state.target_removed[a/3]){
+			cmd.type = sim_CommandType_NoCommand;
+			//std::cout<<"No command" << std::endl;
 			return 0;
 		}
 
@@ -219,7 +227,18 @@ extern "C"{
 		return 0;
 	}
 
+	int action_rewards(int a){
+		int target = a/3;
+		int reward = 0;
+		if(observed_state.target_removed[target]){
+			reward -= 1;
+		}
+		// if(a%3 != 2){
+		// 	reward -= 1;
+		// }
 
+		return reward;
+	}
 
 	// GUI VERSION:
 	int initialize_gui(){
@@ -245,8 +264,10 @@ extern "C"{
 		sim_Command cmd;
 
 		int action_type = a%3;
+		std::cout << action_type << std::endl;
 
 		if(observed_state.target_removed[a/3]){
+			cmd.type = sim_CommandType_NoCommand;
 			return 0;
 		}
 

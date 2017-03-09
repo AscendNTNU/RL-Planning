@@ -7,7 +7,7 @@ import scipy.misc
 import os
 import subprocess
 from ctypes import *
-import time
+from time import time
 
 _sim = CDLL('./PythonAccessToSim.so')
 
@@ -16,10 +16,10 @@ D = 3+3*Num_Targets # input dimensionality
 
 class ai_data_input_struct(Structure):
 	_fields_ = [("elapsed_time", c_float),
-				("drone_x", c_int),
-				("drone_y", c_int),
-				("target_x", c_int*Num_Targets),
-				("target_y", c_int*Num_Targets),
+				("drone_x", c_float),
+				("drone_y", c_float),
+				("target_x", c_float*Num_Targets),
+				("target_y", c_float*Num_Targets),
 				("target_q", c_float*Num_Targets)]
 
 class step_result(Structure):
@@ -33,13 +33,17 @@ _sim.send_command.restype = c_int
 _sim.initialize.restype = c_int
 _sim.recieve_state_gui.restype = step_result
 _sim.send_command_gui.restype = c_int
+_sim.action_rewards.restype = c_int
 
 class Qnetwork():
 	def __init__(self, lr, s_size,a_size,h_size, batch_size, myScope):
 		#These lines established the feed-forward part of the network. The agent takes a state and produces an action.
+		initializer = tf.contrib.layers.xavier_initializer()
 		self.inputs= tf.placeholder(shape=[None,s_size],dtype=tf.float32)
-		self.hidden = slim.fully_connected(self.inputs,h_size,biases_initializer=None,activation_fn=tf.nn.relu)
-		self.streamAC,self.streamVC = tf.split(1,2,self.hidden)
+		self.hidden = slim.fully_connected(self.inputs,h_size,biases_initializer=None,weights_initializer = initializer, activation_fn=tf.nn.relu)
+		self.hidden2 = slim.fully_connected(self.hidden,h_size,biases_initializer=None,weights_initializer = initializer, activation_fn=tf.nn.relu)
+		self.hidden3 = slim.fully_connected(self.hidden2,h_size,biases_initializer=None,weights_initializer = initializer, activation_fn=tf.nn.relu)
+		self.streamAC,self.streamVC = tf.split(1,2,self.hidden3)
 		self.streamA = tf.contrib.layers.flatten(self.streamAC)
 		self.streamV = tf.contrib.layers.flatten(self.streamVC)
 		self.AW = tf.Variable(tf.random_normal([int(h_size/2), a_size]))
@@ -104,10 +108,10 @@ def updateTarget(op_holder,sess):
 
 def observation_to_input_array(ai_view):
 	#print(ai_view.elapsed_time)
-	result = np.array([ai_view.elapsed_time%20, ai_view.drone_x/20, ai_view.drone_y/20])
+	result = np.array([ai_view.elapsed_time%20, ai_view.drone_x/20.0, ai_view.drone_y/20.0])
 	for i in range(Num_Targets):
-		result = np.append(result, ai_view.target_x[i]/20)
-		result = np.append(result, ai_view.target_y[i]/20)
+		result = np.append(result, ai_view.target_x[i]/20.0)
+		result = np.append(result, ai_view.target_y[i]/20.0)
 		result = np.append(result, ai_view.target_q[i]/(3.14159265359*2))
 	return result
 
@@ -121,13 +125,13 @@ update_freq = 4 #How often to perform a training step.
 y = .995 #Discount factor on the target Q-values
 startE = 1#Starting chance of random action
 endE = 0.1 #Final chance of random action
-anneling_steps = 5000000 #How many steps of training to reduce startE to endE.
+anneling_steps = 6000000 #How many steps of training to reduce startE to endE.
 num_episodes = 10000000#How many episodes of game environment to train network with.
-pre_train_steps = 1000000 #How many steps of random actions before training begins.
+pre_train_steps = 100000 #How many steps of random actions before training begins.
 #max_epLength = 6*10 #The max allowed length of our episode.
-load_model = False#True #Whether to load a saved model.
+load_model = False#Whether to load a saved model.
 path = "./dqn" #The path to save our model to.
-h_size = 128#Hidden layer size
+h_size = 256#Hidden layer size
 tau = 0.001 #Rate to update target network toward primary network
 learning_rate = 1e-4
 action_pool = list(range(0,3*Num_Targets))
@@ -185,7 +189,7 @@ with tf.Session() as sess:
 			#TODO:COULD CAUSE PROBLEMS
 			process = subprocess.Popen("build/sim")
 			step = _sim.recieve_state_gui()
-			while step.ai_data_input.elapsed_time - last_time < 10:
+			while step.ai_data_input.elapsed_time - last_time < 2:
 				step = _sim.recieve_state_gui()
 			last_time = step.ai_data_input.elapsed_time
 		else:
@@ -201,37 +205,42 @@ with tf.Session() as sess:
 		xList = []
 		rAll = 0
 		j = 0
-
 		#The Q-Network
 		while True: #If the agent takes longer than max time, end the trial.
 			j+=1
-
 			#Choose an action by greedily (with e chance of random action) from the Q-network
-			if np.random.rand(1) < e:# or total_steps < pre_train_steps:
+			if np.random.rand(1) < e and not render:# or total_steps < pre_train_steps:
 				a = np.random.randint(0,3*Num_Targets)
 			else:
 				a = sess.run(mainQN.predict,feed_dict={mainQN.inputs:[s]})[0]
+				#actionDist = sess.run(mainQN.Qout,feed_dict={mainQN.inputs:[s]})[0]
+				#print(actionDist)
+			r =_sim.action_rewards(action_pool[a])/1000;
 
 			if render:
 				_sim.send_command_gui(action_pool[a])
 				step = _sim.recieve_state_gui()
-				while step.cmd_done == 0:
+				while step.ai_data_input.elapsed_time - last_time < 2 or not step.cmd_done:
+					r += step.reward
 					step = _sim.recieve_state_gui()
+				last_time = step.ai_data_input.elapsed_time
 			else:
 				_sim.send_command(action_pool[a])
 				step = _sim.step()
-				while step.cmd_done == 0:
+				while not step.cmd_done:
+					r += step.reward
 					step = _sim.step()
+				
 
 			s1 = observation_to_input_array(step.ai_data_input);
 			
-			r = step.reward
+			r += step.reward
 			d = step.done
 			total_steps += 1
 			episodeBuffer.add(np.reshape(np.array([s,a,r,s1,d]),[1,5])) #Save the experience to our episode buffer.
-			#print(a, step.ai_data_input.elapsed_time, step.ai_data_input.drone_x,step.ai_data_input.drone_y,step.ai_data_input.target_x[0],step.ai_data_input.target_y[0], step.ai_data_input.target_q[0])
+			#print(a,r, step.ai_data_input.elapsed_time, step.ai_data_input.drone_x,step.ai_data_input.drone_y,step.ai_data_input.target_x[0],step.ai_data_input.target_y[0], step.ai_data_input.target_q[0])
 
-			if total_steps > pre_train_steps:
+			if total_steps > pre_train_steps and not render:
 				if e > endE:
 					e -= stepDrop
 				
@@ -253,6 +262,8 @@ with tf.Session() as sess:
 
 			if d == True:
 				break
+
+		
 		if render:
 			print("killing")
 			process.kill()
@@ -264,7 +275,7 @@ with tf.Session() as sess:
 		rList.append(rAll)
 		#print(rAll)
 		#Periodically save the model. 
-		if i % 50 == 0 and i != 0:
+		if i % 50 == 0 and i != 0 and not render:
 
 			mean_reward = np.mean(rList[-50:])
 			mean_length = np.mean(jList[-50:])
@@ -277,7 +288,7 @@ with tf.Session() as sess:
 
 			summary_writer.flush( 	)
 
-		if i % 1000 == 0 and i != 0:
+		if i % 1000 == 0 and i != 0 and not render:
 			saver.save(sess,path+'/model-'+str(i)+'.cptk')
 			print("Saved Model")
 

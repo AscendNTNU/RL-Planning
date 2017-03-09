@@ -6,4 +6,4 @@ build/*.dll
 dqn
 dqn_summary
 imgui.ini
-
+model

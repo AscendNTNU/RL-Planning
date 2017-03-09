@@ -18,22 +18,6 @@ from estimators import ValueEstimator, PolicyEstimator
 from ctypes import *
 from helper import *
 
-temp = CDLL('./PythonAccessToSim.so')
-Num_Targets = temp.get_sim_Num_Targets()
-class ai_data_input_struct(Structure):
-  _fields_ = [("elapsed_time", c_float),
-        ("drone_x", c_int),
-        ("drone_y", c_int),
-        ("target_x", c_int*Num_Targets),
-        ("target_y", c_int*Num_Targets),
-        ("target_q", c_float*Num_Targets)]
-
-class step_result(Structure):
-  _fields_ = [("ai_data_input", ai_data_input_struct),
-        ("reward", c_float),
-        ("done", c_bool),
-        ("cmd_done", c_bool)]
-
 
 Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
 
@@ -89,7 +73,7 @@ class Worker(object):
     self.global_value_net = value_net
     self.global_counter = global_counter
     self.local_counter = itertools.count()
-    self.sp = StateProcessor()
+    #self.sp = StateProcessor()
     self.summary_writer = summary_writer
 
     self.env = CDLL('./PythonAccessToSim.so')
@@ -97,7 +81,7 @@ class Worker(object):
     self.env.send_command.restype = c_int
     self.env.initialize.restype = c_int
     self.env.recieve_state_gui.restype = step_result
-
+    self.actions = list(range(0,3*Num_Targets))
 
     # Create local policy/value nets that are not updated asynchronously
     with tf.variable_scope(name):
@@ -119,9 +103,8 @@ class Worker(object):
     with sess.as_default(), sess.graph.as_default():
       # Initial state
       self.env.initialize()
-      self.sim = self.env.step()
+      run = self.env.step()
       self.state = observation_to_input_array(run.ai_data_input)
-
       try:
         while not coord.should_stop():
           # Copy Parameters from the global networks
@@ -156,17 +139,19 @@ class Worker(object):
     for _ in range(n):
       # Take a step
       action_probs = self._policy_net_predict(self.state, sess)
+      #print(action_probs)
       action = np.random.choice(np.arange(len(action_probs)), p=action_probs)
+      #print(action)
       #TODO check where this chooses actions from
-      self.env.send_command(action)
+      self.env.send_command(self.actions[action])
 
       next_run = self.env.step()
-      while(!next_run.cmd_done):
+      while not next_run.cmd_done:
         next_run = self.env.step()
       next_state = observation_to_input_array(next_run.ai_data_input)
       # Store transition
       transitions.append(Transition(
-        state=self.state, action=action, reward=reward, next_state=next_state, done=next_run.done))
+        state=self.state, action=action, reward=next_run.reward, next_state=next_state, done=next_run.done))
 
       # Increase local and global counters
       local_t = next(self.local_counter)
@@ -175,9 +160,9 @@ class Worker(object):
       if local_t % 100 == 0:
         tf.logging.info("{}: local Step {}, global step {}".format(self.name, local_t, global_t))
 
-      if done:
+      if next_run.done:
         self.env.initialize()
-        sim = self.env.step()
+        run = self.env.step()
         state = observation_to_input_array(run.ai_data_input)
         break
       else:
@@ -230,7 +215,6 @@ class Worker(object):
       self.policy_net.summaries,
       self.value_net.summaries
     ], feed_dict)
-
     # Write summaries
     if self.summary_writer is not None:
       self.summary_writer.add_summary(pnet_summaries, global_step)

@@ -728,6 +728,8 @@ sim_State sim_init(unsigned int seed)
     DRONE->cmd_done = true;
     DRONE->land_timer = 0.0f;
 
+    int randomSpawn = _xor128()%Num_Targets;
+
     for (unsigned int i = 0; i < Num_Targets; i++)
     {
         sim_Robot robot = {};
@@ -745,13 +747,16 @@ sim_State sim_init(unsigned int seed)
         robot.L = Sim_Robot_Wheel_Distance;
 
         // Spawn each ground robot in a circle
-        
-        float t = TWO_PI * i / (float)(Num_Targets);
+
+        // Random spawn variable "rotates" where each robot is
+        // placed such that, f.e.,  Robot 0 isnt always the robot facing
+        // east
+        float t = wrap_angle(TWO_PI * (i+randomSpawn) / (float)(Num_Targets));
         robot.x = 10.0f + Sim_Target_Init_Radius * cosf(t);
         robot.y = 10.0f + Sim_Target_Init_Radius * sinf(t);
         robot.q = t;
 
-        //TODO: Spawn each ground robot randomly on circle
+        //  Spawns each ground robot randomly on circle
         // uint random_start_number = (seed*rand())%11;
         // float t = TWO_PI * random_start_number / (float)(10);
         // //float t = TWO_PI * (_xor128() % 11) / (float)(10);
@@ -827,7 +832,6 @@ sim_State sim_tick(sim_State state, sim_Command new_cmd)
         DRONE->cmd_done = false;
         DRONE->cmd = new_cmd;
     }
-
     switch (DRONE->cmd.type)
     {
         case sim_CommandType_NoCommand:
@@ -907,6 +911,7 @@ sim_State sim_tick(sim_State state, sim_Command new_cmd)
                 DRONE->land_timer -= Sim_Timestep;
                 if (DRONE->land_timer < 0.0f)
                 {
+                    
                     events[DRONE->cmd.i].is_bumper = true;
                     DRONE->landing = false;
                     DRONE->cmd_done = true;

@@ -45,11 +45,11 @@ class step_result(Structure):
 
 def observation_to_input_array(ai_view):
 	#print(ai_view.elapsed_time)
-	result = np.array([ai_view.elapsed_time, ai_view.drone_x, ai_view.drone_y])
+	result = np.array([ai_view.elapsed_time%20/20, ai_view.drone_x/20, ai_view.drone_y/20])
 	for i in range(Num_Targets):
-		result = np.append(result, ai_view.target_x[i])
-		result = np.append(result, ai_view.target_y[i])
-		result = np.append(result, ai_view.target_q[i])
+		result = np.append(result, ai_view.target_x[i]/20)
+		result = np.append(result, ai_view.target_y[i]/20)
+		result = np.append(result, ai_view.target_q[i]/(3.14159265359*2))
 	return result
 
 
@@ -92,11 +92,11 @@ class AC_Network():
 			rnn_out = tf.reshape(lstm_outputs, [-1, 256])
 			
 			#Output layers for policy and value estimations
-			self.policy = slim.fully_connected(hidden,a_size,
+			self.policy = slim.fully_connected(rnn_out,a_size,
 				activation_fn=tf.nn.softmax,
 				weights_initializer=normalized_columns_initializer(0.01),
 				biases_initializer=None)
-			self.value = slim.fully_connected(hidden,1,
+			self.value = slim.fully_connected(rnn_out,1,
 				activation_fn=None,
 				weights_initializer=normalized_columns_initializer(1.0),
 				biases_initializer=None)
@@ -120,7 +120,7 @@ class AC_Network():
 				local_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope)
 				self.gradients = tf.gradients(self.loss,local_vars)
 				self.var_norms = tf.global_norm(local_vars)
-				grads,self.grad_norms = tf.clip_by_global_norm(self.gradients,40.0)
+				grads,self.grad_norms = tf.clip_by_global_norm(self.gradients,1.0)
 				
 				#Apply local gradients to global network
 				global_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'global')
@@ -138,7 +138,7 @@ class Worker():
 		self.episode_lengths = []
 		self.episode_mean_values = []
 		self.summary_writer = tf.summary.FileWriter("train_"+str(self.number))
-
+		self.sleep_time = 1
 		#Create the local copy of the network and the tensorflow op to copy global paramters to local network
 		self.local_AC = AC_Network(s_size,a_size,self.name,trainer)
 		self.update_local_ops = update_target_graph('global',self.name)        
@@ -199,6 +199,8 @@ class Worker():
 		episode_count = sess.run(self.global_episodes)
 		total_steps = 0
 		print("Starting worker " + str(self.number))
+		if render:
+			self.env.initialize_gui()
 		with sess.as_default(), sess.graph.as_default():
 			running_reward = 0
 			while not coord.should_stop():
@@ -210,7 +212,7 @@ class Worker():
 				d = False
 				
 				if render:
-					self.env.initialize_gui()
+
 					process = subprocess.Popen("build/sim")
 					self.step = self.env.recieve_state_gui()
 					s = observation_to_input_array(self.step.ai_data_input);
@@ -224,7 +226,7 @@ class Worker():
 					#Take an action using probabilities from policy network output.
 					#print(self.step.ai_data_input.elapsed_time - self.last_time)
 					#and self.step.ai_data_input.elapsed_time - self.last_time > 5.0:
-					self.last_time = self.step.ai_data_input.elapsed_time;
+					r = 0
 					a_dist,v,rnn_state  = sess.run([self.local_AC.policy,self.local_AC.value,self.local_AC.state_out], 
 						feed_dict={self.local_AC.inputs:[s],
 						self.local_AC.state_in[0]:rnn_state[0],
@@ -233,20 +235,23 @@ class Worker():
 					a = np.argmax(a_dist == a)
 					#print(a_dist)
 					if render:
-						self.env.send_command_gui(self.actions[a])
+						self.env.send_command_gui(self.actions[a])	
 						self.step = self.env.recieve_state_gui()
+						while self.step.cmd_done == 0:
+							r += self.step.reward
+							self.step = self.env.recieve_state_gui()
 					else:
 						self.env.send_command(self.actions[a])
 						self.step = self.env.step()
 						while self.step.cmd_done == 0:
+							r += self.step.reward
 							self.step = self.env.step()
 					d = self.step.done
-					r = self.step.reward
+					r += self.step.reward
 					if d == False:
 						s1 = observation_to_input_array(self.step.ai_data_input);
 					else:
 						s1 = s
-						
 					episode_buffer.append([s,a,r,s1,d,v[0,0]])
 					episode_values.append(v[0,0])	
 
@@ -255,13 +260,12 @@ class Worker():
 					total_steps += 1
 					episode_step_count += 1
 
-
 					# If the episode hasn't ended, but the experience buffer is full, then we
 					# make an update step using that experience rollout.
-					if len(episode_buffer) == 250 and d != True and episode_step_count != max_episode_length - 1:
+					if len(episode_buffer) == 1000 and d != True and episode_step_count != max_episode_length - 1:
 						# Since we don't know what the true final return is, we "bootstrap" from our current
 						# value estimation.
-						v1 = sess.run(self.local_AC.value, 
+						v1 = sess.run(self.local_AC.value, 	
 							feed_dict={self.local_AC.inputs:[s]})[0,0]
 						v_l,p_l,e_l,g_n,v_n = self.train(episode_buffer,sess,gamma,v1)
 						episode_buffer = []
@@ -311,9 +315,9 @@ class Worker():
 max_episode_length = 200
 gamma = .99# discount rate for advantage estimation and reward discounting
 s_size = D #
-a_size = 30#Num_Targets*2 + 1# Agent can move, land or nothing
+a_size = Num_Targets*3# + 1# Agent can move, land or nothing
 load_model = False
-render = False
+render = False	
 model_path = './model'
 
 
@@ -324,7 +328,7 @@ if not os.path.exists(model_path):
 	
 with tf.device("/cpu:0"): 
 	global_episodes = tf.Variable(0,dtype=tf.int32,name='global_episodes',trainable=False)
-	trainer = tf.train.AdamOptimizer(learning_rate=0.00001)
+	trainer = tf.train.RMSPropOptimizer(learning_rate=1e-4, decay=0.99, epsilon=0.1)
 	master_network = AC_Network(s_size,a_size,'global',None) # Generate global network
 	num_workers = multiprocessing.cpu_count() # Set workers ot number of available CPU threads
 	workers = []
@@ -343,7 +347,7 @@ with tf.Session() as sess:
 		sess.run(tf.global_variables_initializer())
 		
 	# This is where the asynchronous magic happens.
-	# Start the "work" process for each worker in a separate threat.
+	# Start the "work" process for each worker in a separate thread.
 	worker_threads = []
 	for worker in workers:
 		worker_work = lambda: worker.work(max_episode_length,gamma,sess,coord,saver)
