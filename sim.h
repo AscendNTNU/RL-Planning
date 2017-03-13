@@ -751,7 +751,8 @@ sim_State sim_init(unsigned int seed)
         // Random spawn variable "rotates" where each robot is
         // placed such that, f.e.,  Robot 0 isnt always the robot facing
         // east
-        float t = wrap_angle(TWO_PI * (i+randomSpawn) / (float)(Num_Targets));
+        // To add this write i+randomSpawn instead of i
+        float t = wrap_angle(TWO_PI * (i) / (float)(Num_Targets));
         robot.x = 10.0f + Sim_Target_Init_Radius * cosf(t);
         robot.y = 10.0f + Sim_Target_Init_Radius * sinf(t);
         robot.q = t;
