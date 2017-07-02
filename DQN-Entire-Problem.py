@@ -47,7 +47,8 @@ class Qnetwork():
 		self.hidden2 = slim.fully_connected(self.hidden,h_size,biases_initializer=None,weights_initializer = initializer, activation_fn=tf.nn.relu)
 		self.hidden2 = slim.dropout(self.hidden2, self.keep_per2)
 		#self.hidden3 = slim.fully_connected(self.hidden2,h_size,biases_initializer=None,weights_initializer = initializer, activation_fn=tf.nn.relu)
-		self.streamAC,self.streamVC = tf.split(1,2,self.hidden2)
+		self.streamAC,self.streamVC = tf.split(value = self.hidden2, num_or_size_splits = 2, axis=1)
+    
 		self.streamA = tf.contrib.layers.flatten(self.streamAC)
 		self.streamV = tf.contrib.layers.flatten(self.streamVC)
 		self.AW = tf.Variable(tf.random_normal([int(h_size/2), a_size]))
@@ -58,7 +59,7 @@ class Qnetwork():
 
 		self.Temp = tf.placeholder(shape=(), dtype = tf.float32)
 		#Then combine them together to get our final Q-values.
-		self.Qout = self.Value + tf.sub(self.Advantage,tf.reduce_mean(self.Advantage,reduction_indices=1,keep_dims=True))
+		self.Qout = self.Value + tf.subtract(self.Advantage,tf.reduce_mean(self.Advantage,reduction_indices=1,keep_dims=True))
 		self.Q_dist = slim.softmax(self.Qout/self.Temp)
 		self.predict = tf.argmax(self.Qout,1)
 		#Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
@@ -66,7 +67,7 @@ class Qnetwork():
 		self.actions = tf.placeholder(shape=[None],dtype=tf.int32)
 		self.actions_onehot = tf.one_hot(self.actions, a_size, dtype=tf.float32)
 		
-		self.Q = tf.reduce_sum(tf.mul(self.Qout, self.actions_onehot), reduction_indices=1)
+		self.Q = tf.reduce_sum(tf.multiply(self.Qout, self.actions_onehot), reduction_indices=1)
 		
 		self.td_error = tf.square(self.targetQ - self.Q)
 		self.loss = tf.reduce_mean(self.td_error)
@@ -123,7 +124,7 @@ def observation_to_input_array(ai_view):
 	return result
 
 
-tf.reset_default_graph() #Clear the Tensorflow graph.
+tf.reset_default_graph() #Clear the Tensorflow graph.h
 
 
 	
