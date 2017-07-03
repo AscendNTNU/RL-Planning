@@ -131,7 +131,7 @@ tf.reset_default_graph() #Clear the Tensorflow graph.h
 batch_size = 50 #How many experiences to use for each training step.
 update_freq = 4 #How often to perform a training step.
 y = .995 #Discount factor on the target Q-values
-startE = 1#Starting chance of random action
+startE = 0.1#Starting chance of random action
 endE = 0.1 #Final chance of random action
 anneling_steps = 8000000 #How many steps of training to reduce startE to endE.
 num_episodes = 10000000#How many episodes of game environment to train network with.
@@ -256,7 +256,7 @@ with tf.Session() as sess:
 
 			if total_steps > pre_train_steps and not render:
 				if e > endE:
-					e -= stepDrop
+					e -= stepDrop	
 				
 				if total_steps % (update_freq) == 0:
 					trainBatch = myBuffer.sample(batch_size) #Get a random batch of experiences.
@@ -287,7 +287,7 @@ with tf.Session() as sess:
 		myBuffer.add(episodeBuffer.buffer)
 		jList.append(j)
 		rList.append(rAll)
-		#print(rAll)
+		print(rAll)
 		#Periodically save the model. 
 		if i % 50 == 0 and i != 0 and not render:
 

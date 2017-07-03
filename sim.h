@@ -181,7 +181,7 @@ typedef float sim_World_Angle;
 // Number of seconds ticked since the sim was intialized
 typedef float sim_Time;
 
-enum robot_State
+enum robot_State 
 {
     Robot_Start,
     Robot_ObstacleWait,

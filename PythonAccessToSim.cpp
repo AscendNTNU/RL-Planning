@@ -13,7 +13,7 @@ std::mutex mtx;
 //step returns the observation, reward and 1 if done.
 
 
-int step_length = 60*2; //Frames?
+int step_length = 60*5; //Frames?
 int last_robot_reward = 0;
 int last_time = 0;
 int last_position_reward = 0;
@@ -46,6 +46,7 @@ struct ai_data_input_struct{
 	float target_x[Num_Targets];
 	float target_y[Num_Targets];
 	float target_q[Num_Targets];
+	int target_removed[Num_Targets];
 };
 
 struct step_result{
@@ -91,15 +92,15 @@ extern "C"{
 
     	//Robot out of bounds rewards
     	//Reward is added each time, so need to remove previously rewarded robots
-    	for(int i = 0; i < Num_Targets; i++){
-    	    if(observed_state.target_reward[i] > 0){
-    	    	reward += observed_state.target_reward[i];
-    	    }
-    	 	else{
-    	 		reward += 0.5*observed_state.target_reward[i];
-    	 	}
-    	}
-
+    	// for(int i = 0; i < Num_Targets; i++){
+    	//     // if(observed_state.target_reward[i] > 0){
+    	//     reward += observed_state.target_reward[i];
+    	//     // }
+    	//  	// else{
+    	//  	// 	reward += 0.5*observed_state.target_reward[i];
+    	//  	// }
+    	// }
+    	reward += observed_state.target_reward[0];
 
    		result = reward_for_robot*(reward);
 
@@ -125,7 +126,8 @@ extern "C"{
     	for(int i = 0; i < Num_Targets; i++){
     	    result += observed_state.target_removed[i];
     	}
-		if(result == Num_Targets || observed_state.elapsed_time > 600){
+		if(result == Num_Targets || observed_state.elapsed_time > 20000){
+		// if(observed_state.target_removed[0] || observed_state.elapsed_time > 200){
     	    return 1;
     	}
     	return 0;
@@ -151,8 +153,8 @@ extern "C"{
 		for(int i = 0; i < Num_Targets; i++){
 		    //if(observed_state.target_in_view[i]){
 			if(observed_state.target_removed[i]){
-	    		result.target_x[i] = -10;
-	    		result.target_y[i] = -10;				
+	    		result.target_x[i] = observed_state.target_x[i];
+	    		result.target_y[i] = observed_state.target_y[i];			
 			}
 			else{
 	    		result.target_x[i] = observed_state.target_x[i];
@@ -166,6 +168,7 @@ extern "C"{
 		    else{
 		    	result.target_q[i] = (last_robot_q[i]);
 		    }
+		    result.target_removed[i] = observed_state.target_removed[i];
 		}
 
 		return result;
@@ -259,12 +262,46 @@ extern "C"{
 	    return result;
 	}
 
+	int target_send_command_gui(int a, int i){
+		sim_Command cmd;
+	    cmd.i =  i;
+		int action_type = a%3;
+		//std::cout << action_type << std::endl;
+
+		switch(action_type){
+			case 0:
+	            cmd.type = sim_CommandType_LandInFrontOf;
+	            sim_send_cmd(&cmd);
+	            //std::cout<<observed_state.elapsed_time<<std::endl;
+	            //printf("InFront\n");
+	        break;
+
+	        case 1:
+	            cmd.type = sim_CommandType_LandOnTopOf;
+				sim_send_cmd(&cmd);
+	            //std::cout<<observed_state.elapsed_time<<std::endl;
+				//printf("Ontop\n");
+	        break;
+
+	        case 2:
+	        	cmd.type = sim_CommandType_Search;
+	  			cmd.x = observed_state.target_x[i];//a/2-1];
+	  			cmd.y = observed_state.target_y[i];//a/2-1];
+	        	sim_send_cmd(&cmd);
+	        break;
+	        default:
+	        	std::cout<<"this shouldn't happen"<<std::endl;
+
+	    }
+	    return 0;
+	}
+
 	int send_command_gui(int a)
 	{
 		sim_Command cmd;
 
 		int action_type = a%3;
-		std::cout << action_type << std::endl;
+		//std::cout << action_type << std::endl;
 
 		if(observed_state.target_removed[a/3]){
 			cmd.type = sim_CommandType_NoCommand;
