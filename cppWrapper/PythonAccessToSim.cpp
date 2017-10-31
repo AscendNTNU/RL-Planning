@@ -1,13 +1,9 @@
 #define SIM_IMPLEMENTATION
 #define SIM_CLIENT_CODE
-#include "sim.h"
-#include "gui.h"
+#include "../sim.h"
+#include "../gui.h"
 #include <stdio.h>
 #include <iostream>
-#include <mutex>          // std::mutex
-
-std::mutex mtx; 
-
 //This program is used to access the simulation from python. Needs to be compiled as a .dll for windows or .so for linux to work.
 //The three functions used in python are initialize(), step() and send_command()
 //step returns the observation, reward and 1 if done.
@@ -71,10 +67,8 @@ extern "C"{
 
 	int initialize(){
 		//std::cout << "init" << std::endl;
-		mtx.lock();
 		state = sim_init(rand());
 		observed_state = sim_observe_state(state);
-		mtx.unlock();
 		//for reward calculation
 		last_robot_reward = 0;
 		last_time = 0;
@@ -90,18 +84,7 @@ extern "C"{
 		float result = 0;
     	float reward = 0;
 
-    	//Robot out of bounds rewards
-    	//Reward is added each time, so need to remove previously rewarded robots
-    	// for(int i = 0; i < Num_Targets; i++){
-    	//     // if(observed_state.target_reward[i] > 0){
-    	//     reward += observed_state.target_reward[i];
-    	//     // }
-    	//  	// else{
-    	//  	// 	reward += 0.5*observed_state.target_reward[i];
-    	//  	// }
-    	// }
     	reward += observed_state.target_reward[0];
-
    		result = reward_for_robot*(reward);
 
     	result -= last_robot_reward;
@@ -178,9 +161,7 @@ extern "C"{
 	    step_result result;
 	    prev_obv_state = observed_state;
 	    for (unsigned int tick = 0; tick < step_length; tick++){
-	    	mtx.lock();
 	        state = sim_tick(state, cmd);
-	        mtx.unlock();
 	        if (state.drone.cmd_done){
                 cmd.type = sim_CommandType_NoCommand;
             }

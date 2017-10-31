@@ -32,7 +32,7 @@
 #ifndef SIM_HEADER_INCLUDE
 #define SIM_HEADER_INCLUDE
 #define Num_Obstacles (0)  // Number of robots with pole
-#define Num_Targets   (10) // Number of robots without pole
+#define Num_Targets   (1) // Number of robots without pole
 #define Num_Robots    (Num_Obstacles + Num_Targets)
 enum sim_CommandType
 {
