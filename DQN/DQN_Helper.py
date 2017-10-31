@@ -44,7 +44,7 @@ def observation_to_input_array(ai_view):
     result = np.append(result, ai_view.target_x[0]/20.0)
     result = np.append(result, ai_view.target_y[0]/20.0)
     result = np.append(result, ai_view.target_q[0]/(3.14159265359*2))
-    result = np.append(result, ai_view.target_removed[target])
+    result = np.append(result, ai_view.target_removed[0])
     return result
 
 def target_observation_to_input_array(ai_view, target):

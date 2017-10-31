@@ -6,7 +6,7 @@ from time import time
 import numpy as np
 
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+import tensorflow.contrib.layers as layers
 
 from DQN_Helper import * 
 
@@ -40,14 +40,15 @@ _sim.action_rewards.restype = c_int
 
 # Neural network setup
 class Qnetwork():
-    def __init__(self, lr, s_size,a_size, h_size, batch_size, myScope):
+    def __init__(self, lr, s_size,a_size, h_size, batch_size, scope):
         
         #These lines established the feed-forward part of the network. The agent takes a state and produces an action.
-        initializer = tf.contrib.layers.xavier_initializer()
         self.inputs= tf.placeholder(shape=[None,s_size], dtype=tf.float32)
-        self.hidden = slim.fully_connected(self.inputs, h_size, biases_initializer=None, weights_initializer=initializer, activation_fn=tf.nn.relu)
+        self.keep_per = tf.placeholder(shape=(), dtype=tf.float32)
+        self.hidden = layers.fully_connected(self.inputs, h_size)
+        self.hidden = layers.dropout(self.hidden, self.keep_per)
 
-        self.streamAC, self.streamVC = tf.split(1, 2, self.hidden)
+        self.streamAC, self.streamVC = tf.split(self.hidden, 2, 1)
         self.streamA = tf.contrib.layers.flatten(self.streamAC)
         self.streamV = tf.contrib.layers.flatten(self.streamVC)
         self.AW = tf.Variable(tf.random_normal([int(h_size/2), a_size]))
@@ -57,7 +58,7 @@ class Qnetwork():
         
         #Then combine them together to get our final Q-values.
         self.Qout = self.Value + tf.subtract(self.Advantage, tf.reduce_mean(self.Advantage, reduction_indices=1, keep_dims=True))
-        self.Q_dist = slim.softmax(self.Qout)
+        self.Q_dist = layers.softmax(self.Qout)
         self.predict = tf.argmax(self.Qout, 1)
 
         #Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
@@ -87,14 +88,14 @@ tau = 0.001                 #Rate to update target network toward primary networ
 learning_rate = 1e-4        
 action_pool = list(range(0,3))
 
-load_model = True           #Whether to load a saved model.
-training = False            #Whether to train or not.
+training = True          #Whether to train or not.
+load_model = False  
 
 
 tf.reset_default_graph()
 
-mainQN = Qnetwork(lr=learning_rate,s_size=D, a_size=len(action_pool), h_size=h_size, batch_size = batch_size, myScope = "main")
-targetQN = Qnetwork(lr=learning_rate,s_size=D, a_size=len(action_pool), h_size=h_size, batch_size = batch_size,  myScope = "target") #Load the agent.
+mainQN = Qnetwork(lr=learning_rate, s_size=D, a_size=len(action_pool), h_size=h_size, batch_size=batch_size, scope="main")
+targetQN = Qnetwork(lr=learning_rate, s_size=D, a_size=len(action_pool), h_size=h_size, batch_size=batch_size,  scope="target") #Load the agent.
 init = tf.global_variables_initializer()
 saver = tf.train.Saver()
 trainables = tf.trainable_variables()
@@ -115,6 +116,7 @@ if not os.path.exists(path):
     os.makedirs(path)
 
 with tf.Session() as sess:
+    print("here")
     if training:
         if load_model == True:
             print('Loading Model...')
@@ -148,7 +150,7 @@ with tf.Session() as sess:
             while True:
                 #Run one step
                 steps += 1
-                action = sess.run(mainQN.predict, feed_dict={mainQN.inputs:[state]})
+                action = sess.run(mainQN.predict, feed_dict={mainQN.inputs:[state], mainQN.keep_per:(1-e)+0.1})
                 action = action[0]
                 reward = 0
 
@@ -174,17 +176,18 @@ with tf.Session() as sess:
                     if total_steps % update_freq == 0:
                         states_batch, action_batch, reward_batch, next_states_batch, done_batch = experience_buffer.sample(batch_size) #Get action random batch of experiences.
                         #Below we perform the Double-DQN update to the target Q-values
-                        Q1 = sess.run(mainQN.predict,feed_dict={mainQN.inputs:next_states_batch}) #TODO: if this breaks try np.vstack
-                        Q2 = sess.run(targetQN.Qout,feed_dict={targetQN.inputs:next_states_batch})
+                        Q1 = sess.run(mainQN.predict,feed_dict={mainQN.inputs:next_states_batch, mainQN.keep_per:1.0}) #TODO: if this breaks try np.vstack
+                        Q2 = sess.run(targetQN.Qout,feed_dict={targetQN.inputs:next_states_batch, targetQN.keep_per:1.0})
                         end_multiplier = -(done_batch - 1)
                         doubleQ = Q2[range(batch_size),Q1]
                         targetQ = reward_batch + (y*doubleQ * end_multiplier)
                         
                         #Update the network with our target values.
                         _ = sess.run(mainQN.updateModel,
-                                feed_dict={mainQN.inputs:states_batch,
-                                           mainQN.targetQ:targetQ,
-                                           mainQN.actions:action_batch})
+                            feed_dict={mainQN.inputs:states_batch,
+                                       mainQN.targetQ:targetQ,
+                                       mainQN.actions:action_batch,
+                                       mainQN.keep_per:1.0})
                         
                         updateTarget(targetOps,sess) #Set the target network to be equal to the primary network.
                 
@@ -235,12 +238,12 @@ with tf.Session() as sess:
                 step = _sim.recieve_state_gui()
 
             target = chooseRobot(step.ai_data_input)
-            state = target_observation_to_input_array(step.ai_data_input,target)
+            state = observation_to_input_array(step.ai_data_input,target)
             done = False
             total_reward = 0
             #The Q-Network
             while True: #If the agent takes longer than max time, end the trial.
-                action = sess.run(targetQN.predict,feed_dict={targetQN.inputs:[state]})
+                action = sess.run(targetQN.predict,feed_dict={targetQN.inputs:state, targetQN.keep_per:1})
                 action = action[0]
                 reward = 0 #_sim.action_rewards(action_pool[action])/1000;
 
