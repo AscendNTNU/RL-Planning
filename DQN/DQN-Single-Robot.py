@@ -78,9 +78,9 @@ update_freq = 4             #How often to perform a training step.
 y = .995                    #Discount factor on the target Q-values
 startE = 0.1                #Starting chance of random action
 endE = 0.1                  #Final chance of random action
-anneling_steps = 1000000    #How many steps of training to reduce startE to endE.
-num_episodes = 10000000     #How many episodes of game environment to train network with.
-pre_train_steps = 1000000   #How many steps of random actions before training begins.
+anneling_steps = 100000    #How many steps of training to reduce startE to endE.
+num_episodes = 10000     #How many episodes of game environment to train network with.
+pre_train_steps = 10000   #How many     steps of random actions before training begins.
 path = "./dqn1"             #The path to save our model to.
 h_size = 256                #Hidden layer size
 tau = 0.001                 #Rate to update target network toward primary network
@@ -100,7 +100,7 @@ init = tf.global_variables_initializer()
 saver = tf.train.Saver()
 trainables = tf.trainable_variables()
 targetOps = updateTargetGraph(trainables,tau)
-experience_buffer = ExperienceBuffer()
+experience_buffer = ExperienceBuffer(buffer_size=pre_train_steps)
 
 #Set the rate of random action decrease. 
 e = startE
@@ -116,7 +116,6 @@ if not os.path.exists(path):
     os.makedirs(path)
 
 with tf.Session() as sess:
-    print("here")
     if training:
         if load_model == True:
             print('Loading Model...')
@@ -132,7 +131,6 @@ with tf.Session() as sess:
 
             #Reset Variables
             last_time = 0
-            episodeBuffer = ExperienceBuffer()
             done = False
             xList = []
             total_reward = 0
@@ -165,7 +163,7 @@ with tf.Session() as sess:
                 reward += step.reward
                 done = step.done
                 total_steps += 1
-                episodeBuffer.add(Experience(state,action,reward,next_state,done))
+                experience_buffer.add(Experience(state, action, reward, next_state, done))
                 #Save the experience to our episode buffer.
 
                 # If we are done with experience collection start updating Q network
@@ -174,6 +172,7 @@ with tf.Session() as sess:
                         e -= stepDrop
 
                     if total_steps % update_freq == 0:
+
                         states_batch, action_batch, reward_batch, next_states_batch, done_batch = experience_buffer.sample(batch_size) #Get action random batch of experiences.
                         #Below we perform the Double-DQN update to the target Q-values
                         Q1 = sess.run(mainQN.predict,feed_dict={mainQN.inputs:next_states_batch, mainQN.keep_per:1.0}) #TODO: if this breaks try np.vstack
@@ -195,11 +194,9 @@ with tf.Session() as sess:
                 state = next_state
 
                 if done:
-                    print(step.ai_data_input.elapsed_time)
                     break
 
             #Get all experiences from this episode and discount their rewards.
-            experience_buffer.add(episodeBuffer.buffer)
             steps_per_episode.append(steps)
             reward_per_episode.append(total_reward)
 

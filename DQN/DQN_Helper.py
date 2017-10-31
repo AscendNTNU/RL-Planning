@@ -12,7 +12,7 @@ class ExperienceBuffer():
     def add(self, experience):
         if len(self.buffer) >= self.buffer_size:
             self.buffer.pop()
-        self.buffer.extend(experience)
+        self.buffer.append(experience)
             
     def sample(self, size):
         samples = random.sample(self.buffer, size)
