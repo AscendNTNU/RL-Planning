@@ -8,7 +8,6 @@
 //The three functions used in python are initialize(), step() and send_command()
 //step returns the observation, reward and 1 if done.
 
-
 int step_length = 60*5; //Frames?
 int last_robot_reward = 0;
 int last_time = 0;

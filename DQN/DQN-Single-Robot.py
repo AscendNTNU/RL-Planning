@@ -76,7 +76,7 @@ class Qnetwork():
 batch_size = 50             #How many experiences to use for each training step.
 update_freq = 4             #How often to perform a training step.
 y = .995                    #Discount factor on the target Q-values
-startE = 0.1                #Starting chance of random action
+startE = 1                  #Starting chance of random action
 endE = 0.1                  #Final chance of random action
 anneling_steps = 100000    #How many steps of training to reduce startE to endE.
 num_episodes = 10000     #How many episodes of game environment to train network with.
@@ -88,8 +88,8 @@ tau = 0.001                 #Rate to update target network toward primary networ
 learning_rate = 1e-4        
 action_pool = list(range(0,3))
 
-training = True          #Whether to train or not.
-load_model = False  
+training = False          #Whether to train or not.
+load_model = False
 
 
 tf.reset_default_graph()
@@ -229,36 +229,29 @@ with tf.Session() as sess:
         for i in range(num_episodes):
             #Reset environment and get first new observation
             last_time = 0
-            process = subprocess.Popen("build/sim")
+            process = subprocess.Popen("../build/sim")
             step = _sim.recieve_state_gui()
             while step.ai_data_input.elapsed_time - last_time < 5:
                 step = _sim.recieve_state_gui()
 
-            target = chooseRobot(step.ai_data_input)
-            state = observation_to_input_array(step.ai_data_input,target)
+            state = observation_to_input_array(step.ai_data_input)
             done = False
             total_reward = 0
             #The Q-Network
             while True: #If the agent takes longer than max time, end the trial.
-                action = sess.run(targetQN.predict,feed_dict={targetQN.inputs:state, targetQN.keep_per:1})
+                action = sess.run(targetQN.predict,feed_dict={targetQN.inputs:[state], targetQN.keep_per:1})
                 action = action[0]
                 reward = 0 #_sim.action_rewards(action_pool[action])/1000;
 
-                _sim.target_send_command_gui(action_pool[action], target)
+                _sim.send_command_gui(action_pool[action])
                 step = _sim.recieve_state_gui()
                 while step.ai_data_input.elapsed_time - last_time < 5 or not step.cmd_done:
                     reward += step.reward
                     step = _sim.recieve_state_gui()
-                    print("stepping")
-                    print(step.ai_data_input.target_y[target])
                 last_time = step.ai_data_input.elapsed_time
                 print("cmd_done")
             
-                if step.ai_data_input.target_removed[target]:
-                    print("choosing new robot")
-                    print(step.ai_data_input.target_y[target])  
-                    target = chooseRobot(step.ai_data_input)
-                next_state = target_observation_to_input_array(step.ai_data_input,target);
+                next_state = observation_to_input_array(step.ai_data_input);
                 
                 reward += step.reward
                 total_reward += reward
