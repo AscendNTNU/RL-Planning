@@ -42,4 +42,4 @@ Windows
 To build .so file from .cpp file(Only works on linux)
 --------------------------------
 Linux:
-	$ cc -fPIC -shared -o filename.so filename.cpp
+```$ cc -fPIC -shared -o filename.so filename.cpp```
