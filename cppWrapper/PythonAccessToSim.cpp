@@ -108,7 +108,7 @@ extern "C"{
     	for(int i = 0; i < Num_Targets; i++){
     	    result += observed_state.target_removed[i];
     	}
-		if(result == Num_Targets || observed_state.elapsed_time > 20000){
+		if(result == Num_Targets || observed_state.elapsed_time > 400){
 		// if(observed_state.target_removed[0] || observed_state.elapsed_time > 200){
     	    return 1;
     	}
@@ -242,39 +242,6 @@ extern "C"{
 	    return result;
 	}
 
-	int target_send_command_gui(int a, int i){
-		sim_Command cmd;
-	    cmd.i =  i;
-		int action_type = a%3;
-		//std::cout << action_type << std::endl;
-
-		switch(action_type){
-			case 0:
-	            cmd.type = sim_CommandType_LandInFrontOf;
-	            sim_send_cmd(&cmd);
-	            //std::cout<<observed_state.elapsed_time<<std::endl;
-	            //printf("InFront\n");
-	        break;
-
-	        case 1:
-	            cmd.type = sim_CommandType_LandOnTopOf;
-				sim_send_cmd(&cmd);
-	            //std::cout<<observed_state.elapsed_time<<std::endl;
-				//printf("Ontop\n");
-	        break;
-
-	        case 2:
-	        	cmd.type = sim_CommandType_Search;
-	  			cmd.x = observed_state.target_x[i];//a/2-1];
-	  			cmd.y = observed_state.target_y[i];//a/2-1];
-	        	sim_send_cmd(&cmd);
-	        break;
-	        default:
-	        	std::cout<<"this shouldn't happen"<<std::endl;
-
-	    }
-	    return 0;
-	}
 
 	int send_command_gui(int a)
 	{

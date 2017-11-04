@@ -19,7 +19,7 @@ D = 3+4 # input dimensionality
 class ai_data_input_struct(Structure):
     _fields_ = [("elapsed_time", c_float),
                 ("drone_x", c_float),
-                ("drone_y", c_float),
+                ("drone_y", c_float),       
                 ("target_x", c_float*Num_Targets),
                 ("target_y", c_float*Num_Targets),
                 ("target_q", c_float*Num_Targets),
@@ -47,12 +47,14 @@ class Qnetwork():
         self.keep_per = tf.placeholder(shape=(), dtype=tf.float32)
         self.hidden = layers.fully_connected(self.inputs, h_size)
         self.hidden = layers.dropout(self.hidden, self.keep_per)
+        self.hidden2 = layers.fully_connected(self.hidden, int(h_size/2))
 
-        self.streamAC, self.streamVC = tf.split(self.hidden, 2, 1)
+
+        self.streamAC, self.streamVC = tf.split(self.hidden2, 2, 1)
         self.streamA = tf.contrib.layers.flatten(self.streamAC)
         self.streamV = tf.contrib.layers.flatten(self.streamVC)
-        self.AW = tf.Variable(tf.random_normal([int(h_size/2), a_size]))
-        self.VW = tf.Variable(tf.random_normal([int(h_size/2), 1]))
+        self.AW = tf.Variable(tf.random_normal([int(h_size/4), a_size]))
+        self.VW = tf.Variable(tf.random_normal([int(h_size/4), 1]))
         self.Advantage = tf.matmul(self.streamA, self.AW)
         self.Value = tf.matmul(self.streamV, self.VW)
         
@@ -73,23 +75,23 @@ class Qnetwork():
         self.trainer = tf.train.AdamOptimizer(learning_rate=0.0001)
         self.updateModel = self.trainer.minimize(self.loss)
 
-batch_size = 50             #How many experiences to use for each training step.
+batch_size = 100            #How many experiences to use for each training step.
 update_freq = 4             #How often to perform a training step.
-y = .995                    #Discount factor on the target Q-values
+y = .95                     #Discount factor on the target Q-values
 startE = 1                  #Starting chance of random action
-endE = 0.1                  #Final chance of random action
-anneling_steps = 100000    #How many steps of training to reduce startE to endE.
-num_episodes = 10000     #How many episodes of game environment to train network with.
-pre_train_steps = 10000   #How many     steps of random actions before training begins.
+endE = 0.05                 #Final chance of random action
+anneling_steps = 2000000    #How many steps of training to reduce startE to endE.
+num_episodes =   100000    #How many episodes of game environment to train network with.
+pre_train_steps = 30000     #How many steps of random actions before training begins.
 path = "./dqn1"             #The path to save our model to.
-h_size = 256                #Hidden layer size
+h_size = 128                #Hidden layer size
 tau = 0.001                 #Rate to update target network toward primary network
 
 learning_rate = 1e-4        
 action_pool = list(range(0,3))
 
-training = False          #Whether to train or not.
-load_model = False
+training = False        #Whether to train or not.
+load_model = True          
 
 
 tf.reset_default_graph()
@@ -173,15 +175,18 @@ with tf.Session() as sess:
 
                     if total_steps % update_freq == 0:
 
-                        states_batch, action_batch, reward_batch, next_states_batch, done_batch = experience_buffer.sample(batch_size) #Get action random batch of experiences.
-                        #Below we perform the Double-DQN update to the target Q-values
-                        Q1 = sess.run(mainQN.predict,feed_dict={mainQN.inputs:next_states_batch, mainQN.keep_per:1.0}) #TODO: if this breaks try np.vstack
-                        Q2 = sess.run(targetQN.Qout,feed_dict={targetQN.inputs:next_states_batch, targetQN.keep_per:1.0})
-                        end_multiplier = -(done_batch - 1)
-                        doubleQ = Q2[range(batch_size),Q1]
-                        targetQ = reward_batch + (y*doubleQ * end_multiplier)
+                        #Replay a batch of random experiences
+                        states_batch, action_batch, reward_batch, next_states_batch, done_batch = experience_buffer.sample(batch_size) 
                         
-                        #Update the network with our target values.
+                        #Below we perform the Double-DQN update to the target Q-values
+                        best_actions_index = sess.run(mainQN.predict,feed_dict={mainQN.inputs:next_states_batch, mainQN.keep_per:1.0})
+                        target_Q_values = sess.run(targetQN.Qout,feed_dict={targetQN.inputs:next_states_batch, targetQN.keep_per:1.0})
+
+                        end_multiplier = -(done_batch - 1) # End multiplier is inverse of done(I.E. if you are done you don't want to find the value of the next state)
+                        target_Q_values = target_Q_values[range(batch_size),best_actions_index] # Choose the Q-values from the target network to match the action taken by our main network
+                        targetQ = reward_batch + (y*target_Q_values*end_multiplier)
+                                    
+                        # Train the network
                         _ = sess.run(mainQN.updateModel,
                             feed_dict={mainQN.inputs:states_batch,
                                        mainQN.targetQ:targetQ,
@@ -242,7 +247,7 @@ with tf.Session() as sess:
                 action = sess.run(targetQN.predict,feed_dict={targetQN.inputs:[state], targetQN.keep_per:1})
                 action = action[0]
                 reward = 0 #_sim.action_rewards(action_pool[action])/1000;
-
+                print(action_pool[action])
                 _sim.send_command_gui(action_pool[action])
                 step = _sim.recieve_state_gui()
                 while step.ai_data_input.elapsed_time - last_time < 5 or not step.cmd_done:
@@ -251,7 +256,7 @@ with tf.Session() as sess:
                 last_time = step.ai_data_input.elapsed_time
                 print("cmd_done")
             
-                next_state = observation_to_input_array(step.ai_data_input);
+                state = observation_to_input_array(step.ai_data_input);
                 
                 reward += step.reward
                 total_reward += reward
