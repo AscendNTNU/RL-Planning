@@ -4,11 +4,19 @@ import numpy as np
 import tensorflow as tf
 
 from util import * 
-from sim_variable_setup import * 
+from sim_variable_setup import *
+import network
 
 action_pool = list(range(0,3))
 
 tf.reset_default_graph()
+
+# This must match the network that was trained
+h_size = 128
+learning_rate = 1e-4        
+targetQN = network.Qnetwork(lr=learning_rate, s_size=D, a_size=len(action_pool), h_size=h_size)
+mainQN = network.Qnetwork(lr=learning_rate, s_size=D, a_size=len(action_pool), h_size=h_size)
+
 
 trainables = tf.trainable_variables()
 targetOps = updateTargetGraph(trainables,0.001)
@@ -35,7 +43,7 @@ with tf.Session() as sess:
 	total_reward = 0
 	#The Q-Network
 	while True: #If the agent takes longer than max time, end the trial.
-	    action = sess.run(targetQN.predict,feed_dict={targetQN.inputs:[state], targetQN.keep_per:1})
+	    action = sess.run(targetQN.predict,feed_dict={targetQN.inputs:[state], targetQN.dropout_ratio:1})
 	    action = action[0]
 	    reward = 0 #sim.action_rewards(action_pool[action])/1000;
 	    print(action_pool[action])
