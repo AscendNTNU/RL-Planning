@@ -5,6 +5,8 @@ sim = CDLL('../cppWrapper/PythonAccessToSim.so')
 
 Num_Targets =sim.get_sim_Num_Targets()
 D = 3+4 # input dimensionality
+action_pool = list(range(0,3)) #output dim
+        
 
 class ai_data_input_struct(Structure):
     _fields_ = [("elapsed_time", c_float),

@@ -11,17 +11,17 @@ if not os.path.exists(path):
 
 h_size = 128                #Hidden layer size
 learning_rate = 1e-4        
-action_pool = list(range(0,3))
+
+tf.reset_default_graph()
 
 mainQN = network.Qnetwork(lr=learning_rate, s_size=D, a_size=len(action_pool), h_size=h_size)
 targetQN = network.Qnetwork(lr=learning_rate, s_size=D, a_size=len(action_pool), h_size=h_size) #Load the agent.
 
-tf.reset_default_graph()
-init = tf.global_variables_initializer()
 trainables = tf.trainable_variables()
 targetOps = updateTargetGraph(trainables,0.001)
 
 summary_writer = tf.summary.FileWriter("dqn_summary")
+
 saver = tf.train.Saver()
 
 controller = controller.Controller(batch_size=500,

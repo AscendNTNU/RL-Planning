@@ -1,10 +1,12 @@
 import tensorflow as tf
 import numpy as np
+from util import * 
+from sim_variable_setup import *
 
 class Controller():
     def __init__(self, batch_size, buffer_size, anneling_episodes, update_freq, gamma):
         self.sess = tf.Session()
-        self.sess.run(init)
+        self.sess.run(tf.global_variables_initializer())
 
         self.experience_buffer = ExperienceBuffer(buffer_size=buffer_size, batch_size=batch_size)
         self.update_freq = update_freq
@@ -36,7 +38,7 @@ class Controller():
 
         action = action[0]
         sim.send_command(action_pool[action])
-        return sim.step() #TODO: Dont return step if command not done
+        return action, sim.step() #TODO: Dont return step if command not done
 
     def runEpisode(self, mainQN):
         '''
@@ -53,7 +55,7 @@ class Controller():
         while True:
             steps += 1
 
-            step = self.runStep(state, mainQN)
+            action, step = self.runStep(state, mainQN)
             reward = step.reward
             total_reward += reward
             
@@ -76,11 +78,11 @@ class Controller():
         states_batch, action_batch, reward_batch, next_states_batch, done_batch = self.experience_buffer.sample
         
         #Below we perform the Double-DQN update to the target Q-values
-        best_actions_index = sess.run(mainQN.predict,feed_dict={mainQN.inputs:next_states_batch, mainQN.dropout_ratio:1.0})
-        target_Q_values = sess.run(targetQN.q_values,feed_dict={targetQN.inputs:next_states_batch, targetQN.dropout_ratio:1.0})
+        best_actions_index = self.sess.run(mainQN.predict,feed_dict={mainQN.inputs:next_states_batch, mainQN.dropout_ratio:1.0})
+        target_Q_values = self.sess.run(targetQN.q_values,feed_dict={targetQN.inputs:next_states_batch, targetQN.dropout_ratio:1.0})
 
         end_multiplier = -(done_batch - 1) # End multiplier is inverse of done(I.E. if you are done you don't want to find the value of the next state)
-        target_Q_values = target_Q_values[range(batch_size),best_actions_index] # Choose the Q-values from the target network to match the action taken by our main network
+        target_Q_values = target_Q_values[range(len(action_batch)),best_actions_index] # Choose the Q-values from the target network to match the action taken by our main network
         targetQ = reward_batch + (self.gamma*target_Q_values*end_multiplier)
                     
         # Train the network
@@ -90,7 +92,7 @@ class Controller():
                        mainQN.actions:action_batch,
                        mainQN.dropout_ratio:1.0})
         
-        updateTarget(targetOps,sess) #Set the target network to be equal to the primary network.
+        updateTarget(targetOps,self.sess) #Set the target network to be equal to the primary network.
 
     def saveStats(self, summary_writer, stats_freq):
             #Periodically save the model. 

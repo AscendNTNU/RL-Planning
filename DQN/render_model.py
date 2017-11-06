@@ -8,6 +8,8 @@ from sim_variable_setup import *
 
 action_pool = list(range(0,3))
 
+tf.reset_default_graph()
+
 trainables = tf.trainable_variables()
 targetOps = updateTargetGraph(trainables,0.001)
 

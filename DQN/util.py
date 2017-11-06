@@ -21,8 +21,7 @@ class ExperienceBuffer():
     
     @property
     def full(self):
-        return len(self.buffer) > buffer_size
-
+        return len(self.buffer) > self.buffer_size
 
     def add(self, experience):
         if len(self.buffer) >= self.buffer_size:
