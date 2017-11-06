@@ -2,23 +2,32 @@ import random
 import numpy as np
 from collections import namedtuple
 
+tau = 0.001                 #Rate to update target network toward primary network
+
 Experience = namedtuple("Experience", ["state", "action", "reward", "next_state", "done"])
 
 class ExperienceBuffer():
-    def __init__(self, buffer_size=1000000):
+    def __init__(self, buffer_size=1000000, batch_size=50):
         self.buffer = []
+        self.batch_size = batch_size
         self.buffer_size = buffer_size
+            
+    @property
+    def sample(self):
+        samples = random.sample(self.buffer, self.batch_size)
+        states_batch, action_batch, reward_batch, next_states_batch, done_batch = map(np.array, zip(*samples))
+        return states_batch, action_batch, reward_batch, next_states_batch, done_batch
     
+    @property
+    def full(self):
+        return len(self.buffer) > buffer_size
+
+
     def add(self, experience):
         if len(self.buffer) >= self.buffer_size:
             self.buffer.pop()
         self.buffer.append(experience)
-            
-    def sample(self, size):
-        samples = random.sample(self.buffer, size)
-        states_batch, action_batch, reward_batch, next_states_batch, done_batch = map(np.array, zip(*samples))
-        return states_batch, action_batch, reward_batch, next_states_batch, done_batch
-       
+
 def discountRewards(reward, gamma):
     """ take 1D float array of rewards and compute discounted reward """
     discounted_reward = np.zeros_like(reward)
@@ -54,12 +63,3 @@ def target_observation_to_input_array(ai_view, target):
     result = np.append(result, ai_view.target_q[target]/(3.14159265359*2))
     result = np.append(result, ai_view.target_removed[target])
     return result
-
-def chooseRobot(ai_view):
-    max_y = 0.0
-    target = 0
-    for i in range(Num_Targets):
-        if(ai_view.target_y[i]>max_y and not ai_view.target_y[i]>20):
-            max_y = ai_view.target_y[i]
-            target = i
-    return target
