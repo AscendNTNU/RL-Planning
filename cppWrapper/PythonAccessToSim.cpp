@@ -157,8 +157,9 @@ extern "C"{
 	    step_result result;
 	    prev_obv_state = observed_state;
 	    int tick = 1;
-	    while(tick<step_length && !state.drone.cmd_done){
+	    while(tick<step_length || !state.drone.cmd_done){
 	    	state = sim_tick(state, cmd);
+	    	tick += 1;
 	    }
 	    observed_state = sim_observe_state(state);
 	    result.observation = update_ai_input();

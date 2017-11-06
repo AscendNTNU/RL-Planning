@@ -2,7 +2,7 @@ import random
 import numpy as np
 from collections import namedtuple
 
-tau = 0.001                 #Rate to update target network toward primary network
+tau = 0.01                 #Rate to update target network toward primary network
 path = "./dqn"             #The path to save our model to.
 
 Experience = namedtuple("Experience", ["state", "action", "reward", "next_state", "done"])
@@ -21,7 +21,11 @@ class ExperienceBuffer():
     
     @property
     def full(self):
-        return len(self.buffer) > self.buffer_size
+        return len(self.buffer) == self.buffer_size
+
+    @property
+    def fraction_filled(self):
+        return len(self.buffer) / self.buffer_size
 
     def add(self, experience):
         if len(self.buffer) >= self.buffer_size:

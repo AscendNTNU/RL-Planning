@@ -4,7 +4,7 @@ from util import *
 from sim_variable_setup import *
 
 class Controller():
-    def __init__(self, batch_size, buffer_size, anneling_episodes, update_freq, gamma):
+    def __init__(self, batch_size, buffer_size, anneling_episodes, update_freq, gamma, trainables):
         self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
 
@@ -18,6 +18,9 @@ class Controller():
         self.reward_per_episode = []
         self.steps_per_episode = []
         self.episode_number = 1
+
+        # Network updater
+        self.targetOps = updateTargetGraph(trainables,0.001)
 
 
     def decreaseDropout(self):
@@ -38,13 +41,12 @@ class Controller():
 
         action = action[0]
         sim.send_command(action_pool[action])
-        return action, sim.step() #TODO: Dont return step if command not done
+        return action, sim.step() 
 
     def runEpisode(self, mainQN):
         '''
         Runs one episode of the mission
         '''
-
         total_reward = 0
         steps = 0
 
@@ -92,7 +94,7 @@ class Controller():
                        mainQN.actions:action_batch,
                        mainQN.dropout_ratio:1.0})
         
-        updateTarget(targetOps,self.sess) #Set the target network to be equal to the primary network.
+        updateTarget(self.targetOps, self.sess) #Set the target network to be equal to the primary network.
 
     def saveStats(self, summary_writer, stats_freq):
             #Periodically save the model. 
@@ -105,7 +107,7 @@ class Controller():
                 summary.value.add(tag='Perf/Length', simple_value=float(mean_length))
 
                 summary_writer.add_summary(summary, self.episode_number)
-                print(self.episode_number, "Mean reward: ", mean_reward, " Mean steps: ", mean_length, " e: ", self.dropout_ratio)
+                print(self.episode_number, "Mean reward: ", mean_reward, " Mean steps: ", int(mean_length), " e: ", self.dropout_ratio)
 
                 summary_writer.flush()
 
