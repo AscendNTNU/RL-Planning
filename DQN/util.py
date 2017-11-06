@@ -3,6 +3,7 @@ import numpy as np
 from collections import namedtuple
 
 tau = 0.001                 #Rate to update target network toward primary network
+path = "./dqn"             #The path to save our model to.
 
 Experience = namedtuple("Experience", ["state", "action", "reward", "next_state", "done"])
 
@@ -27,15 +28,6 @@ class ExperienceBuffer():
         if len(self.buffer) >= self.buffer_size:
             self.buffer.pop()
         self.buffer.append(experience)
-
-def discountRewards(reward, gamma):
-    """ take 1D float array of rewards and compute discounted reward """
-    discounted_reward = np.zeros_like(reward)
-    running_add = 0
-    for t in reversed(xrange(0, reward.size)):
-        running_add = running_add * gamma + reward[t]
-        discounted_reward[t] = running_add
-    return discounted_reward
 
 def updateTargetGraph(tfVars, tau):
     total_vars = len(tfVars)

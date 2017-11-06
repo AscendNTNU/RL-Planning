@@ -6,13 +6,8 @@ from sim_variable_setup import *
 import network
 import controller
 
-path = "./dqn"             #The path to save our model to.
 if not os.path.exists(path):
     os.makedirs(path)
-
-summary_writer = tf.summary.FileWriter("dqn_summary")
-saver = tf.train.Saver()
-
 
 h_size = 128                #Hidden layer size
 learning_rate = 1e-4        
@@ -25,6 +20,9 @@ tf.reset_default_graph()
 init = tf.global_variables_initializer()
 trainables = tf.trainable_variables()
 targetOps = updateTargetGraph(trainables,0.001)
+
+summary_writer = tf.summary.FileWriter("dqn_summary")
+saver = tf.train.Saver()
 
 controller = controller.Controller(batch_size=500,
                             buffer_size=100000,

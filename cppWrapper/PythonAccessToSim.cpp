@@ -9,7 +9,7 @@
 //step returns the observation, reward and 1 if done.
 
 int step_length = 60*5; //Frames?
-int episode_length = 60*100
+int episode_length = 60*100;
 int last_robot_reward = 0;
 int last_time = 0;
 int last_position_reward = 0;
@@ -72,11 +72,7 @@ extern "C"{
 		//for reward calculation
 		last_robot_reward = 0;
 		last_time = 0;
-		// last_position_reward = 0;
-		// for(int i = 0; i < Num_Targets; i++){
-		// 	last_position_reward  += findRobotValue(observed_state.target_x[i], observed_state.target_y[i],
-		// 	            observed_state.target_q[i], (int)observed_state.elapsed_time % 20);
-  //   	}
+
 		return 0;
 	}
 
@@ -90,10 +86,9 @@ extern "C"{
     	result -= last_robot_reward;
     	last_robot_reward = reward_for_robot*(reward);
 
-    	Time spent rewards
+    	//Time spent rewards
     	result -= (observed_state.elapsed_time - last_time);
     	last_time = observed_state.elapsed_time;
-    	result += position_reward();
 
     	return result/reward_for_robot;
 	}
@@ -161,13 +156,10 @@ extern "C"{
 	step_result step(){
 	    step_result result;
 	    prev_obv_state = observed_state;
-	    for (unsigned int tick = 0; tick < step_length; tick++){
-	        state = sim_tick(state, cmd);
-	        if (state.drone.cmd_done){
-                cmd.type = sim_CommandType_NoCommand;
-            }
+	    int tick = 1;
+	    while(tick<step_length && !state.drone.cmd_done){
+	    	state = sim_tick(state, cmd);
 	    }
-
 	    observed_state = sim_observe_state(state);
 	    result.observation = update_ai_input();
 	    result.reward = reward_calculator();
@@ -184,7 +176,6 @@ extern "C"{
 		int action_type = a%3;
 		if(observed_state.target_removed[a/3]){
 			cmd.type = sim_CommandType_NoCommand;
-			//std::cout<<"No command" << std::endl;
 			return 0;
 		}
 
@@ -209,6 +200,8 @@ extern "C"{
 	        	std::cout << "This shouldn't happen" << std::endl;
 	        break;
 		}
+		state = sim_tick(state, cmd);
+		cmd.type = sim_CommandType_NoCommand;
 		return 0;
 	}
 

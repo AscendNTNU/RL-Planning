@@ -6,8 +6,16 @@ import tensorflow as tf
 from util import * 
 from sim_variable_setup import * 
 
+action_pool = list(range(0,3))
+
+trainables = tf.trainable_variables()
+targetOps = updateTargetGraph(trainables,0.001)
+
+saver = tf.train.Saver()
+
 
 with tf.Session() as sess:
+	last_time = 0
 	path = "./dqn"             #The path to save our model to.
 	print('Loading Model...')
 	ckpt = tf.train.get_checkpoint_state(path)

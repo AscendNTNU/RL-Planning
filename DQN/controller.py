@@ -1,3 +1,6 @@
+import tensorflow as tf
+import numpy as np
+
 class Controller():
     def __init__(self, batch_size, buffer_size, anneling_episodes, update_freq, gamma):
         self.sess = tf.Session()
@@ -12,12 +15,14 @@ class Controller():
         # Summary statistics
         self.reward_per_episode = []
         self.steps_per_episode = []
-        self.episode_number = 0
+        self.episode_number = 1
 
 
     def decreaseDropout(self):
+
         if self.dropout_ratio < 0.9:
             self.dropout_ratio += self.change_per_episode
+
 
     def runStep(self, state, network):
         '''
@@ -89,7 +94,7 @@ class Controller():
 
     def saveStats(self, summary_writer, stats_freq):
             #Periodically save the model. 
-            if self.episode_number % stats_freq == 0 and i != 0:
+            if self.episode_number % stats_freq == 0:
 
                 mean_reward = np.mean(self.reward_per_episode[-stats_freq:])
                 mean_length = np.mean(self.steps_per_episode[-stats_freq:])
@@ -97,12 +102,12 @@ class Controller():
                 summary.value.add(tag='Perf/Reward', simple_value=float(mean_reward))
                 summary.value.add(tag='Perf/Length', simple_value=float(mean_length))
 
-                summary_writer.add_summary(summary, i)
-                print(i, "Mean reward: ", mean_reward, " Mean steps: ", mean_length, " e: ", self.dropout_ratio)
+                summary_writer.add_summary(summary, self.episode_number)
+                print(self.episode_number, "Mean reward: ", mean_reward, " Mean steps: ", mean_length, " e: ", self.dropout_ratio)
 
                 summary_writer.flush()
 
-    def saveModel(self, saver, model_freq)
-            if i % model_freq == 0 and i != 0:
-                saver.save(self.sess,path+'/model-'+str(i)+'.cptk')
+    def saveModel(self, saver, model_freq):
+            if self.episode_number % model_freq == 0:
+                saver.save(self.sess,path+'/model-'+str(self.episode_number)+'.cptk')
                 print("Saved Model")
