@@ -21,11 +21,11 @@ summary_writer = tf.summary.FileWriter("dqn_summary")
 
 saver = tf.train.Saver()
 
-controller = controller.Controller(batch_size=500,
-                            buffer_size=100000,
-                            anneling_episodes=75000,
+controller = controller.Controller(batch_size=100,
+                            buffer_size=20000,
+                            anneling_episodes=10000,
                             update_freq=4,
-                            gamma=0.95,
+                            gamma=0.99,
                             trainables=tf.trainable_variables())
             
 print("Filling the experience buffer - This can take some time")
@@ -34,8 +34,7 @@ while not controller.experience_buffer.full:
     print("Progress {:2.1%}".format(controller.experience_buffer.fraction_filled, end="\r"))
 
 while 1:
-    controller.runEpisode(mainQN)
-    controller.trainNetwork(mainQN, targetQN)
+    controller.runEpisode(mainQN, targetQN)
     controller.decreaseDropout()
     controller.saveStats(summary_writer, stats_freq=100)
     controller.saveModel(saver, model_freq=1000)

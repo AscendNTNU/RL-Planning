@@ -1,6 +1,5 @@
 from ctypes import *
 
-
 sim = CDLL('../cppWrapper/PythonAccessToSim.so')
 
 Num_Targets =sim.get_sim_Num_Targets()

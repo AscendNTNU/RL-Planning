@@ -43,7 +43,7 @@ class Controller():
         sim.send_command(action_pool[action])
         return action, sim.step() 
 
-    def runEpisode(self, mainQN):
+    def runEpisode(self, mainQN, targetQN=None):
         '''
         Runs one episode of the mission
         '''
@@ -64,7 +64,11 @@ class Controller():
             next_state = observation_to_input_array(step.ai_data_input)
             self.experience_buffer.add(Experience(state, action, reward, next_state, step.done))
             
+            if targetQN is not None and steps%self.update_freq == 0:
+                self.trainNetwork(mainQN, targetQN)
+
             state = next_state
+
             if step.done:
                 self.steps_per_episode.append(steps)
                 self.reward_per_episode.append(total_reward)
