@@ -9,18 +9,18 @@ class Qnetwork():
         hidden = layers.fully_connected(self.inputs, h_size)
         hidden = layers.dropout(hidden, self.dropout_ratio)
         hidden2 = layers.fully_connected(hidden, int(h_size/2))
-        hidden2 = layers.dropout(hidden2, self.dropout_ratio)
+        # hidden2 = layers.dropout(hidden2, self.dropout_ratio)
 
         output1, output2 = tf.split(hidden2, 2, 1)
         self.advantage_weights = tf.Variable(tf.random_normal([int(h_size/4), a_size]))
         self.value_weights = tf.Variable(tf.random_normal([int(h_size/4), 1]))
 
-        advantage = tf.matmul(output1, self.advantage_weights)
-        value = tf.matmul(output2, self.value_weights)
+        self.advantage = tf.matmul(output1, self.advantage_weights)
+        self.value = tf.matmul(output2, self.value_weights)
         
         #Then combine them together to get our final Q-values.
-        self.q_values = value + tf.subtract(advantage, tf.reduce_mean(advantage, reduction_indices=1, keep_dims=True))
-        self.q_values = layers.softmax(self.q_values)
+        self.q_values = self.value + tf.subtract(self.advantage, tf.reduce_mean(self.advantage, reduction_indices=1, keep_dims=True))
+        self.q_dist = layers.softmax(self.q_values)
         self.predict = tf.argmax(self.q_values, 1)
 
         #Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.

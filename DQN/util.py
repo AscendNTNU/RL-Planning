@@ -2,7 +2,6 @@ import random
 import numpy as np
 from collections import namedtuple
 
-tau = 0.01                 #Rate to update target network toward primary network
 path = "./dqn"             #The path to save our model to.
 
 Experience = namedtuple("Experience", ["state", "action", "reward", "next_state", "done"])

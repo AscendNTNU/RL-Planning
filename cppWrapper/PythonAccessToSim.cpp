@@ -9,7 +9,7 @@
 //step returns the observation, reward and 1 if done.
 
 int step_length = 60*5; //Frames?
-int episode_length = 60*100;
+int episode_length = 200;
 int last_robot_reward = 0;
 int last_time = 0;
 int last_position_reward = 0;
@@ -85,10 +85,9 @@ extern "C"{
 
     	result -= last_robot_reward;
     	last_robot_reward = reward_for_robot*(reward);
-
     	//Time spent rewards
-    	result -= (observed_state.elapsed_time - last_time);
-    	last_time = observed_state.elapsed_time;
+    	// result -= (observed_state.elapsed_time - last_time);
+    	// last_time = observed_state.elapsed_time;
 
     	return result/reward_for_robot;
 	}
@@ -105,7 +104,7 @@ extern "C"{
     	for(int i = 0; i < Num_Targets; i++){
     	    result += observed_state.target_removed[i];
     	}
-		if(result == Num_Targets || observed_state.elapsed_time > 400){
+		if(result == Num_Targets || observed_state.elapsed_time > episode_length){
 		// if(observed_state.target_removed[0] || observed_state.elapsed_time > 200){
     	    return 1;
     	}
@@ -166,8 +165,6 @@ extern "C"{
 	    result.reward = reward_calculator();
 
 	    result.done = get_done();
-
-	    result.cmd_done = ready_for_command();
 
 	    return result;
 	}

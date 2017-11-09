@@ -4,15 +4,16 @@ from util import *
 from sim_variable_setup import *
 
 class Controller():
-    def __init__(self, batch_size, buffer_size, anneling_episodes, update_freq, gamma, trainables):
-        self.sess = tf.Session()
-        self.sess.run(tf.global_variables_initializer())
+    def __init__(self, batch_size, buffer_size, anneling_episodes, update_freq, gamma, sess, targetOps):
 
+        self.sess = sess
+
+        
         self.experience_buffer = ExperienceBuffer(buffer_size=buffer_size, batch_size=batch_size)
         self.update_freq = update_freq
         self.gamma = gamma
         self.dropout_ratio = 0.1
-        self.change_per_episode = (0.9-self.dropout_ratio)/anneling_episodes
+        self.change_per_episode = (1-self.dropout_ratio)/anneling_episodes
 
         # Summary statistics
         self.reward_per_episode = []
@@ -20,12 +21,12 @@ class Controller():
         self.episode_number = 1
 
         # Network updater
-        self.targetOps = updateTargetGraph(trainables,0.001)
+        self.targetOps = targetOps
 
 
     def decreaseDropout(self):
 
-        if self.dropout_ratio < 0.9:
+        if self.dropout_ratio < 1:
             self.dropout_ratio += self.change_per_episode
 
 
@@ -49,9 +50,12 @@ class Controller():
         '''
         total_reward = 0
         steps = 0
-
         sim.initialize()
         step = sim.step()
+        while(step.ai_data_input.drone_x <= 0):
+            sim.initialize()
+            step = sim.step()
+
         state = observation_to_input_array(step.ai_data_input)
 
         while True:
@@ -60,14 +64,12 @@ class Controller():
             action, step = self.runStep(state, mainQN)
             reward = step.reward
             total_reward += reward
-            
             next_state = observation_to_input_array(step.ai_data_input)
             self.experience_buffer.add(Experience(state, action, reward, next_state, step.done))
-            
+            state = next_state
+
             if targetQN is not None and steps%self.update_freq == 0:
                 self.trainNetwork(mainQN, targetQN)
-
-            state = next_state
 
             if step.done:
                 self.steps_per_episode.append(steps)
