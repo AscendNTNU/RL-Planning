@@ -17,10 +17,6 @@ learning_rate = 1e-4
 targetQN = network.Qnetwork(lr=learning_rate, s_size=D, a_size=len(action_pool), h_size=h_size)
 mainQN = network.Qnetwork(lr=learning_rate, s_size=D, a_size=len(action_pool), h_size=h_size)
 
-
-trainables = tf.trainable_variables()
-targetOps = updateTargetGraph(trainables,0.001)
-
 saver = tf.train.Saver()
 
 
@@ -30,7 +26,6 @@ with tf.Session() as sess:
 	print('Loading Model...')
 	ckpt = tf.train.get_checkpoint_state(path)
 	saver.restore(sess,ckpt.model_checkpoint_path)
-	updateTarget(targetOps,sess) #Set the target network to be equal to the primary network.
 
 	sim.initialize_gui()
 	process = subprocess.Popen("../build/sim")

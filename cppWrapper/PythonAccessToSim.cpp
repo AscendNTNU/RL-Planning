@@ -86,8 +86,8 @@ extern "C"{
     	result -= last_robot_reward;
     	last_robot_reward = reward_for_robot*(reward);
     	//Time spent rewards
-    	// result -= (observed_state.elapsed_time - last_time);
-    	// last_time = observed_state.elapsed_time;
+    	result -= (observed_state.elapsed_time - last_time);
+    	last_time = observed_state.elapsed_time;
 
     	return result/reward_for_robot;
 	}

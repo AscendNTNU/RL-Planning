@@ -29,8 +29,8 @@ with tf.Session() as sess:
     updateTarget(targetOps, sess)
 
     controller = controller.Controller(batch_size=1000,
-                                buffer_size=1000000,
-                                anneling_episodes=200000,
+                                buffer_size=200000,
+                                anneling_episodes=100000,
                                 update_freq=4,
                                 gamma=0.95,
                                 sess=sess,

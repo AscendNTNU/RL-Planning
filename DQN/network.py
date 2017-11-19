@@ -9,7 +9,7 @@ class Qnetwork():
         hidden = layers.fully_connected(self.inputs, h_size)
         hidden = layers.dropout(hidden, self.dropout_ratio)
         hidden2 = layers.fully_connected(hidden, int(h_size/2))
-        # hidden2 = layers.dropout(hidden2, self.dropout_ratio)
+        hidden2 = layers.dropout(hidden2, self.dropout_ratio)
 
         output1, output2 = tf.split(hidden2, 2, 1)
         self.advantage_weights = tf.Variable(tf.random_normal([int(h_size/4), a_size]))
