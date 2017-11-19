@@ -7,3 +7,6 @@ dqn
 dqn_summary
 imgui.ini
 model
+__pycache__
+DQN/*
+!DQN/*.py

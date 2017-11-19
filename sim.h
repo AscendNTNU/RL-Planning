@@ -32,7 +32,7 @@
 #ifndef SIM_HEADER_INCLUDE
 #define SIM_HEADER_INCLUDE
 #define Num_Obstacles (0)  // Number of robots with pole
-#define Num_Targets   (10) // Number of robots without pole
+#define Num_Targets   (1) // Number of robots without pole
 #define Num_Robots    (Num_Obstacles + Num_Targets)
 enum sim_CommandType
 {
@@ -752,18 +752,18 @@ sim_State sim_init(unsigned int seed)
         // placed such that, f.e.,  Robot 0 isnt always the robot facing
         // east
         // To add this write i+randomSpawn instead of i
-        float t = wrap_angle(TWO_PI * (i) / (float)(Num_Targets));
-        robot.x = 10.0f + Sim_Target_Init_Radius * cosf(t);
-        robot.y = 10.0f + Sim_Target_Init_Radius * sinf(t);
-        robot.q = t;
-
-        //  Spawns each ground robot randomly on circle
-        // uint random_start_number = (seed*rand())%11;
-        // float t = TWO_PI * random_start_number / (float)(10);
-        // //float t = TWO_PI * (_xor128() % 11) / (float)(10);
+        // float t = wrap_angle(TWO_PI * (i) / (float)(Num_Targets));
         // robot.x = 10.0f + Sim_Target_Init_Radius * cosf(t);
         // robot.y = 10.0f + Sim_Target_Init_Radius * sinf(t);
         // robot.q = t;
+
+        //  Spawns each ground robot randomly on circle
+        uint random_start_number = (seed*rand())%11;
+        float t = TWO_PI * random_start_number / (float)(10);
+        //float t = TWO_PI * (_xor128() % 11) / (float)(10);
+        robot.x = 10.0f + Sim_Target_Init_Radius * cosf(t);
+        robot.y = 10.0f + Sim_Target_Init_Radius * sinf(t);
+        robot.q = t;
 
         robot.internal.initialized = false;
         robot.state = Robot_Start;
