@@ -169,14 +169,15 @@ extern "C"{
 	    return result;
 	}
 
-	int send_command(int a){
-
-		int action_type = a%3;
-		if(observed_state.target_removed[a/3]){
-			cmd.type = sim_CommandType_NoCommand;
-			return 0;
-		}
-
+	int distance = 2;
+	sim_Command command_picker(int a){
+		int action_type = a;
+		// if(observed_state.target_removed[a/3]){
+		// 	cmd.type = sim_CommandType_NoCommand;
+		// 	return 0;
+		// }
+		cmd.x = observed_state.drone_x;
+		cmd.y = observed_state.drone_y;
 		switch(action_type){
 			case 0:
 	            cmd.type = sim_CommandType_LandInFrontOf;
@@ -190,14 +191,41 @@ extern "C"{
 
 	        case 2:
 	        	cmd.type = sim_CommandType_Search;
-	  			cmd.x = observed_state.target_x[a/3];
-	  			cmd.y = observed_state.target_y[a/3];
+	        	if(cmd.x + distance < 20){
+		  			cmd.x = observed_state.drone_x + distance;        		
+	        	}
 			break;
-
+	        case 3:
+	        	cmd.type = sim_CommandType_Search;
+	        	if(cmd.x-distance > 0){
+		  			cmd.x = observed_state.drone_x - distance;
+	        	}
+			break;
+	        case 4:
+	        	cmd.type = sim_CommandType_Search;
+	        	if(cmd.y-distance > 0){
+		  			cmd.y = observed_state.drone_y - distance;
+	        	}
+			break;
+	        case 5:
+	        	cmd.type = sim_CommandType_Search;
+	        	if(cmd.y + distance < 20){
+		  			cmd.y = observed_state.drone_y + distance;
+	        	}
+        	break;
+	        case 6:
+	        	cmd.type = sim_CommandType_NoCommand;
+			break;
 	        default:
 	        	std::cout << "This shouldn't happen" << std::endl;
 	        break;
 		}
+		return cmd;
+	}
+
+	int send_command(int a){
+
+		cmd = command_picker(a);
 		state = sim_tick(state, cmd);
 		cmd.type = sim_CommandType_NoCommand;
 		return 0;
@@ -236,43 +264,8 @@ extern "C"{
 	int send_command_gui(int a)
 	{
 		sim_Command cmd;
-
-		int action_type = a%3;
-		//std::cout << action_type << std::endl;
-
-		if(observed_state.target_removed[a/3]){
-			cmd.type = sim_CommandType_NoCommand;
-			return 0;
-		}
-
-		switch(action_type){
-			case 0:
-	            cmd.type = sim_CommandType_LandInFrontOf;
-	            cmd.i =  a/3;
-	            sim_send_cmd(&cmd);
-	            //std::cout<<observed_state.elapsed_time<<std::endl;
-	            //printf("InFront\n");
-	        break;
-
-	        case 1:
-	            cmd.type = sim_CommandType_LandOnTopOf;
-	            cmd.i =  a/3;
-				sim_send_cmd(&cmd);
-	            //std::cout<<observed_state.elapsed_time<<std::endl;
-				//printf("Ontop\n");
-	        break;
-
-	        case 2:
-	        	cmd.type = sim_CommandType_Search;
-	  			cmd.x = observed_state.target_x[ a/3];//a/2-1];
-	  			cmd.y = observed_state.target_y[ a/3];//a/2-1];
-	        	sim_send_cmd(&cmd);
-	        break;
-	        default:
-	        	std::cout<<"this shouldn't happen"<<std::endl;
-
-	    }
-	    return 0;
+		cmd = command_picker(a);
+        sim_send_cmd(&cmd);
+        return 0;
 	}
-
 }

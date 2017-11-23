@@ -28,7 +28,7 @@ class ExperienceBuffer():
 
     def add(self, experience):
         if len(self.buffer) >= self.buffer_size:
-            self.buffer.pop()
+            self.buffer.pop(0)
         self.buffer.append(experience)
 
 def updateTargetGraph(tfVars, tau):

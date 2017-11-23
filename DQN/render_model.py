@@ -6,9 +6,6 @@ import tensorflow as tf
 from util import * 
 from sim_variable_setup import *
 import network
-
-action_pool = list(range(0,3))
-
 tf.reset_default_graph()
 
 # This must match the network that was trained
